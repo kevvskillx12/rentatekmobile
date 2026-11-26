@@ -1,0 +1,12 @@
+{
+  "appId": "mx.rentatek.app",
+  "appName": "Rentatek",
+  "webDir": "../web/frontend/dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

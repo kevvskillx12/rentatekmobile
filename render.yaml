@@ -1,0 +1,20 @@
+# Despliegue del backend en Render (New → Blueprint → elegir este repositorio)
+services:
+  - type: web
+    name: rentatek-api
+    runtime: node
+    plan: free
+    region: oregon # misma región que la base de datos
+    rootDir: jesus/web/backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/salud
+    envVars:
+      - key: DATABASE_URL
+        sync: false # se pega a mano en Render (la "External Database URL" de tu base)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_URL
+        sync: false # opcional: URL pública del frontend, para los enlaces de los correos

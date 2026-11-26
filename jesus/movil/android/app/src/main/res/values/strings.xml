@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rentatek</string>
+    <string name="title_activity_main">Rentatek</string>
+    <string name="package_name">mx.rentatek.app</string>
+    <string name="custom_url_scheme">mx.rentatek.app</string>
+</resources>

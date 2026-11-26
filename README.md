@@ -1,17 +1,34 @@
-# rentatek
+# Rentatek
 
-A new Flutter project.
+Plataforma de renta de maquinaria. Este repositorio contiene las dos aplicaciones del proyecto, cada una de forma independiente:
 
-## Getting Started
+```
+.
+├── web/      Aplicación web (Svelte + Vite) y API (Node/Express + PostgreSQL)
+│   ├── frontend/
+│   └── backend/
+└── movil/    Aplicación móvil (Flutter)
+```
 
-This project is a starting point for a Flutter application.
+## Web
 
-A few resources to get you started if this is your first Flutter project:
+Requisitos: Node.js 18+.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+cd web
+npm run install:all          # instala raíz, backend y frontend
+cp backend/.env.example backend/.env   # y rellena DATABASE_URL y JWT_SECRET
+npm run dev                  # levanta API (puerto 3001) y frontend a la vez
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Más detalles en `web/frontend/README.md` y `web/backend/README.md`.
+
+## Móvil
+
+Requisitos: Flutter SDK.
+
+```bash
+cd movil
+flutter pub get
+flutter run
+```

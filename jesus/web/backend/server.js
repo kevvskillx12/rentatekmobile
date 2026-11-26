@@ -559,9 +559,11 @@ proveedor.patch('/solicitudes/:id', ah(async (req, res) => {
       await cliente.query('ROLLBACK');
       return res.status(404).json({ error: 'Solicitud no encontrada o ya respondida.' });
     }
-    if (estado === 'aceptada') {
+    // Las solicitudes sin fechas (p. ej. creadas desde la app Flutter) no se revisan por choque
+    if (estado === 'aceptada' && s.fecha_inicio && s.fecha_fin) {
       const { rows: [choque] } = await cliente.query(
         `SELECT 1 FROM solicitudes WHERE maquina_id = $1 AND estado = 'aceptada' AND id <> $2
+           AND fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL
            AND daterange(fecha_inicio, fecha_fin, '[]') && daterange($3::date, $4::date, '[]')`,
         [s.maquina_id, s.id, s.fecha_inicio, s.fecha_fin]);
       if (choque) {
@@ -572,7 +574,7 @@ proveedor.patch('/solicitudes/:id', ah(async (req, res) => {
     await cliente.query('UPDATE solicitudes SET estado = $1 WHERE id = $2', [estado, s.id]);
     if (estado === 'aceptada') {
       await cliente.query(
-        `UPDATE maquinaria SET estado = 'rentada' WHERE id = $1 AND $2::date <= ${HOY}`, [s.maquina_id, s.fecha_inicio]);
+        `UPDATE maquinaria SET estado = 'rentada' WHERE id = $1 AND COALESCE($2::date, ${HOY}) <= ${HOY}`, [s.maquina_id, s.fecha_inicio]);
     }
     await cliente.query('COMMIT');
     sol = { ...s, estado };
@@ -634,7 +636,8 @@ clienteR.post('/solicitudes', ah(async (req, res) => {
 
   const { rows: [choque] } = await pool.query(
     `SELECT 1 FROM solicitudes WHERE maquina_id = $1 AND estado = 'aceptada'
-       AND daterange(fecha_inicio, fecha_fin, '[]') && daterange($2::date, $3::date, '[]')`, [maquinaId, ini, fin]);
+       AND fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL
+           AND daterange(fecha_inicio, fecha_fin, '[]') && daterange($2::date, $3::date, '[]')`, [maquinaId, ini, fin]);
   if (choque) return res.status(409).json({ error: 'El equipo ya está rentado en parte de esas fechas. Elige otras.' });
 
   const { rows: [dup] } = await pool.query(

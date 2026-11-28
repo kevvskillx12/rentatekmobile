@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import { migrar } from './db/migraciones.js';
 import { enviarCorreo, correoActivo } from './correo.js';
 import { verificarIdentidad } from './identidad.js';
+import { agruparUbicaciones } from './ubicaciones.js';
 
 const { DATABASE_URL, JWT_SECRET, PORT = 3001, CORS_ORIGIN, APP_URL = 'http://localhost:5173' } = process.env;
 if (!DATABASE_URL || !JWT_SECRET) {
@@ -103,6 +104,15 @@ function validarMaquina(b) {
   };
 }
 
+// Celular de México: 10 dígitos (acepta +52 / 521 al inicio). Devuelve los 10 dígitos o null.
+function telefonoMx(v) {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (d.length === 12 && d.startsWith('52')) d = d.slice(2);
+  else if (d.length === 13 && d.startsWith('521')) d = d.slice(3);
+  return d.length === 10 ? d : null;
+}
+const ERROR_TELEFONO = 'El teléfono debe tener 10 dígitos.';
+
 function fechaValida(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(s)) && !Number.isNaN(Date.parse(s));
 }
@@ -130,7 +140,8 @@ app.post('/api/auth/registro', ah(async (req, res) => {
   const password = String(req.body.password || '');
   const rol = req.body.rol;
   const empresa = texto(req.body.empresa, 120) || null;
-  const telefono = texto(req.body.telefono, 30).replace(/[^\d+]/g, '') || null;
+  const telefono = req.body.telefono ? telefonoMx(req.body.telefono) : null;
+  if (req.body.telefono && !telefono) return res.status(400).json({ error: ERROR_TELEFONO });
 
   if (!nombre || !email || !password) return res.status(400).json({ error: 'Completa todos los campos.' });
   if (password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
@@ -179,7 +190,8 @@ app.get('/api/auth/yo', auth(), ah(async (req, res) => {
 app.put('/api/auth/perfil', auth(), ah(async (req, res) => {
   const nombre = texto(req.body.nombre, 120);
   const empresa = texto(req.body.empresa, 120) || null;
-  const telefono = texto(req.body.telefono, 30).replace(/[^\d+]/g, '') || null;
+  const telefono = req.body.telefono ? telefonoMx(req.body.telefono) : null;
+  if (req.body.telefono && !telefono) return res.status(400).json({ error: ERROR_TELEFONO });
   if (!nombre) return res.status(400).json({ error: 'El nombre no puede quedar vacío.' });
   const { rows } = await pool.query(
     'UPDATE usuarios SET nombre = $1, empresa = $2, telefono = $3 WHERE id = $4 RETURNING *',
@@ -276,6 +288,8 @@ app.get('/api/maquinaria', ah(async (req, res) => {
   if (q.disponibles === '1') where.push(`m.estado = 'disponible'`);
   if (q.excluir) where.push(`m.id <> ${p(id(q.excluir))}`);
   if (q.proveedor) where.push(`m.proveedor_id = ${p(id(q.proveedor))}`);
+  // Filtro Estado/Ciudad: lista exacta de textos de ubicación (ver /api/maquinaria/filtros)
+  if (q.ciudades) where.push(`m.ciudad = ANY(${p([].concat(q.ciudades).map(String).slice(0, 200))})`);
 
   const ORDENES = {
     recientes: 'm.created_at DESC',
@@ -301,7 +315,8 @@ app.get('/api/maquinaria/filtros', ah(async (_req, res) => {
     `SELECT DISTINCT m.ciudad FROM maquinaria m JOIN usuarios u ON u.id = m.proveedor_id
      WHERE NOT u.suspendido ORDER BY m.ciudad`);
   const { rows: [r] } = await pool.query('SELECT COALESCE(max(precio_dia), 0)::float AS precio_max FROM maquinaria');
-  res.json({ ciudades: rows.map((x) => x.ciudad), precio_max: r.precio_max });
+  const ciudades = rows.map((x) => x.ciudad);
+  res.json({ ciudades, estados: agruparUbicaciones(ciudades), precio_max: r.precio_max });
 }));
 
 app.get('/api/maquinaria/:id', ah(async (req, res) => {
@@ -669,11 +684,12 @@ clienteR.get('/solicitudes', ah(async (req, res) => {
 clienteR.post('/solicitudes', ah(async (req, res) => {
   const maquinaId = id(req.body.maquina_id);
   const nombre = texto(req.body.nombre_contacto, 120);
-  const telefono = texto(req.body.telefono, 30).replace(/[^\d+]/g, '');
+  const telefono = telefonoMx(req.body.telefono);
   const { fecha_inicio: ini, fecha_fin: fin } = req.body;
   const mensaje = texto(req.body.mensaje);
 
-  if (!nombre || !telefono) return res.status(400).json({ error: 'Escribe tu nombre y teléfono.' });
+  if (!nombre) return res.status(400).json({ error: 'Escribe tu nombre.' });
+  if (!telefono) return res.status(400).json({ error: ERROR_TELEFONO });
   if (!fechaValida(ini) || !fechaValida(fin)) return res.status(400).json({ error: 'Elige las fechas de inicio y fin.' });
 
   const { rows: [f] } = await pool.query(

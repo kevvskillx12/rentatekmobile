@@ -30,13 +30,15 @@
   let paginas = 1;
   let cargando = true;
   let errorCarga = '';
-  let ubicaciones = [];
+  let estados = []; // [{ nombre, ciudades: [{ nombre, valores }] }]
+  let estadoSel = '';
+  let ciudadSel = '';
   let precioTope = 0;
 
   onMount(async () => {
     try {
       const f = await api('/maquinaria/filtros');
-      ubicaciones = f.ciudades;
+      estados = f.estados || [];
       precioTope = f.precio_max;
     } catch {}
   });
@@ -46,17 +48,24 @@
   $: tope = Math.max(10000, Math.ceil(precioTope / 500) * 500);
   $: limite = Math.min(precioMax, tope);
 
+  // Ciudades del estado elegido y los textos de ubicación que abarcan ("Mérida, Yuc.", "Merida Yucatán"…)
+  $: ciudadesEstado = estados.find((e) => e.nombre === estadoSel)?.ciudades || [];
+  $: valoresUbicacion = ciudadSel
+    ? ciudadesEstado.find((c) => c.nombre === ciudadSel)?.valores || []
+    : ciudadesEstado.flatMap((c) => c.valores);
+
   // Texto con retardo para no consultar en cada tecla
   let textoQ = texto, ubicacionQ = ubicacion, t1;
   $: { clearTimeout(t1); const a = texto, b = ubicacion; t1 = setTimeout(() => { textoQ = a; ubicacionQ = b; }, 300); }
 
   // Cualquier cambio de filtro regresa a la página 1
-  $: textoQ, ubicacionQ, categoria, soloDisponibles, limite, orden, (pagina = 1);
+  $: textoQ, ubicacionQ, estadoSel, ciudadSel, categoria, soloDisponibles, limite, orden, (pagina = 1);
 
   $: params = (() => {
     const p = new URLSearchParams({ pagina: String(pagina), limite: String(POR_PAGINA), orden });
     if (textoQ.trim()) p.set('q', textoQ.trim());
-    if (ubicacionQ.trim()) p.set('ciudad', ubicacionQ.trim());
+    if (valoresUbicacion.length) valoresUbicacion.forEach((v) => p.append('ciudades', v));
+    else if (ubicacionQ.trim()) p.set('ciudad', ubicacionQ.trim());
     if (categoria !== 'Todas') p.set('categoria', categoria);
     if (soloDisponibles) p.set('disponibles', '1');
     if (limite < tope) p.set('precio_max', String(limite));
@@ -90,6 +99,7 @@
   $: activos = [
     texto.trim() && { k: 'texto', t: `“${texto.trim()}”` },
     categoria !== 'Todas' && { k: 'categoria', t: categoria },
+    estadoSel && { k: 'estado', t: ciudadSel ? `${ciudadSel}, ${estadoSel}` : estadoSel },
     ubicacion.trim() && { k: 'ubicacion', t: ubicacion.trim() },
     soloDisponibles && { k: 'disp', t: 'Solo disponibles' },
     limite < tope && { k: 'precio', t: `Hasta $${limite.toLocaleString('es-MX')}` }
@@ -99,6 +109,7 @@
     if (k === 'texto') texto = '';
     if (k === 'categoria') categoria = 'Todas';
     if (k === 'ubicacion') ubicacion = '';
+    if (k === 'estado') estadoSel = ciudadSel = '';
     if (k === 'disp') soloDisponibles = false;
     if (k === 'precio') precioMax = SIN_LIMITE;
   }
@@ -107,6 +118,7 @@
     texto = '';
     categoria = 'Todas';
     ubicacion = '';
+    estadoSel = ciudadSel = '';
     soloDisponibles = false;
     precioMax = SIN_LIMITE;
   }
@@ -144,11 +156,19 @@
       </div>
     </div>
 
-    <label class="field">
+    <div class="field">
       <span class="label">Ubicación</span>
-      <input class="input" type="text" list="f-ubis" placeholder="Todas las ciudades" bind:value={ubicacion} />
-      <datalist id="f-ubis">{#each ubicaciones as u}<option value={u}></option>{/each}</datalist>
-    </label>
+      <div class="ubic-selects">
+        <select class="input" bind:value={estadoSel} on:change={() => { ciudadSel = ''; ubicacion = ''; }} aria-label="Estado">
+          <option value="">Todos los estados</option>
+          {#each estados as e (e.nombre)}<option value={e.nombre}>{e.nombre}</option>{/each}
+        </select>
+        <select class="input" bind:value={ciudadSel} disabled={!estadoSel} aria-label="Ciudad">
+          <option value="">{estadoSel ? 'Todas las ciudades' : 'Elige primero un estado'}</option>
+          {#each ciudadesEstado as c (c.nombre)}<option value={c.nombre}>{c.nombre}</option>{/each}
+        </select>
+      </div>
+    </div>
 
     <label class="field">
       <span class="label label-row">Precio máximo <b>{limite < tope ? `$${limite.toLocaleString('es-MX')}` : 'Sin límite'}</b></span>
@@ -231,10 +251,19 @@
       {/each}
     </div>
   </div>
-  <label class="field">
+  <div class="field">
     <span class="label">Ubicación</span>
-    <input class="input" type="text" list="f-ubis" placeholder="Todas las ciudades" bind:value={ubicacion} />
-  </label>
+    <div class="ubic-selects">
+      <select class="input" bind:value={estadoSel} on:change={() => { ciudadSel = ''; ubicacion = ''; }} aria-label="Estado">
+        <option value="">Todos los estados</option>
+        {#each estados as e (e.nombre)}<option value={e.nombre}>{e.nombre}</option>{/each}
+      </select>
+      <select class="input" bind:value={ciudadSel} disabled={!estadoSel} aria-label="Ciudad">
+        <option value="">{estadoSel ? 'Todas las ciudades' : 'Elige primero un estado'}</option>
+        {#each ciudadesEstado as c (c.nombre)}<option value={c.nombre}>{c.nombre}</option>{/each}
+      </select>
+    </div>
+  </div>
   <label class="field">
     <span class="label label-row">Precio máximo <b>{limite < tope ? `$${limite.toLocaleString('es-MX')}` : 'Sin límite'}</b></span>
     <input type="range" min="500" max={tope} step="100" value={limite}

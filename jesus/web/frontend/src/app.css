@@ -1071,3 +1071,8 @@ input[type='range'] { accent-color: var(--brand); width: 100%; }
 .foto-botones { display: flex; gap: 8px; flex-wrap: wrap; }
 .foto-botones label.btn { cursor: pointer; }
 .check-destacado { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+
+/* Filtro de ubicación: Estado y Ciudad, uno debajo del otro */
+.ubic-selects { display: grid; gap: 8px; }
+.ubic-selects select { min-width: 0; text-overflow: ellipsis; }
+.ubic-selects select:disabled { opacity: 0.6; cursor: not-allowed; }

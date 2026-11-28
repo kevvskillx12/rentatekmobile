@@ -4,6 +4,8 @@
   import { api } from '../lib/api.js';
   import { toast } from '../lib/ui.js';
   import Icono from '../lib/Icono.svelte';
+  import CampoTelefono from '../lib/CampoTelefono.svelte';
+  import { telefonoValido } from '../lib/datos.js';
 
   let modo = 'login'; // 'login' | 'registro' | 'olvide'
   let rol = 'cliente'; // 'cliente' | 'proveedor'
@@ -54,6 +56,10 @@
       }
       if (clave.length < 6) {
         error = 'La contraseña debe tener al menos 6 caracteres.';
+        return;
+      }
+      if (telefono && !telefonoValido(telefono)) {
+        error = 'El teléfono debe tener 10 dígitos.';
         return;
       }
     }
@@ -154,7 +160,7 @@
 
           <label class="field" transition:slide={{ duration: 200 }}>
             <span class="label">Teléfono / WhatsApp (opcional)</span>
-            <input class="input" type="tel" bind:value={telefono} placeholder="9991234567" autocomplete="tel" />
+            <CampoTelefono bind:value={telefono} />
           </label>
         {/if}
 

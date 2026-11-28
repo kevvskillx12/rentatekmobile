@@ -12,6 +12,7 @@
   import Estrellas from '../lib/Estrellas.svelte';
   import GraficaIngresos from '../lib/GraficaIngresos.svelte';
   import VerificarIdentidad from '../lib/VerificarIdentidad.svelte';
+  import { ESTADOS, SIN_ESTADO, separarUbicacion, unirUbicacion } from '../lib/ubicaciones.js';
   import {
     normalizar, formatoPrecio, formatoDinero, formatoCompacto, formatoFecha, formatoRango, whatsapp,
     ESTADOS_MAQUINA, ESTADOS_SOLICITUD
@@ -45,7 +46,7 @@
   let quitarFoto = false;
 
   function vacio() {
-    return { nombre: '', categoria: $categorias[0]?.nombre || '', ciudad: '', precio_dia: '', descripcion: '', specs: '', estado: 'disponible', destacado: false };
+    return { nombre: '', categoria: $categorias[0]?.nombre || '', ciudad: '', ubicEstado: '', precio_dia: '', descripcion: '', specs: '', estado: 'disponible', destacado: false };
   }
 
   async function cargarTodo() {
@@ -145,7 +146,7 @@
     f = {
       nombre: eq.nombre,
       categoria: eq.categoria,
-      ciudad: eq.ubicacion,
+      ...(({ ciudad, estado }) => ({ ciudad, ubicEstado: estado === SIN_ESTADO ? '' : estado }))(separarUbicacion(eq.ubicacion)),
       precio_dia: eq.precio,
       descripcion: eq.descripcion,
       specs: specsATexto(eq.specsObj),
@@ -194,12 +195,17 @@
       error = 'Completa nombre, ciudad y precio.';
       return;
     }
+    if (!f.ubicEstado) {
+      error = 'Elige el estado donde está el equipo.';
+      return;
+    }
     if (Number(f.precio_dia) <= 0) {
       error = 'El precio debe ser mayor a 0.';
       return;
     }
     guardando = true;
-    const body = { ...f, precio_dia: Number(f.precio_dia), specs: textoASpecs(f.specs) };
+    const { ubicEstado, ...resto } = f;
+    const body = { ...resto, ciudad: unirUbicacion(f.ciudad, ubicEstado), precio_dia: Number(f.precio_dia), specs: textoASpecs(f.specs) };
     try {
       const nuevo = !editandoId;
       if (nuevo) editandoId = (await api("/proveedor/maquinaria", { method: "POST", body })).id; // si la foto falla, reintentar no duplica el equipo
@@ -524,7 +530,7 @@
     <form id="form-equipo" class="form-grid" on:submit|preventDefault={guardar}>
       <label class="field span-2">
         <span class="label">Nombre del equipo</span>
-        <input class="input" type="text" bind:value={f.nombre} placeholder="Ej. Excavadora CAT 320" />
+        <input class="input" type="text" maxlength="120" bind:value={f.nombre} placeholder="Ej. Excavadora CAT 320" />
       </label>
       <label class="field">
         <span class="label">Categoría</span>
@@ -534,8 +540,15 @@
         </select>
       </label>
       <label class="field">
+        <span class="label">Estado</span>
+        <select class="input" bind:value={f.ubicEstado}>
+          <option value="" disabled>Elige un estado</option>
+          {#each ESTADOS as e (e.nombre)}<option value={e.nombre}>{e.nombre}</option>{/each}
+        </select>
+      </label>
+      <label class="field">
         <span class="label">Ciudad</span>
-        <input class="input" type="text" bind:value={f.ciudad} placeholder="Ej. Mérida, Yuc." />
+        <input class="input" type="text" maxlength="60" bind:value={f.ciudad} placeholder="Ej. Mérida" />
       </label>
       <label class="field">
         <span class="label">Precio por día (MXN)</span>
@@ -545,7 +558,7 @@
         </div>
       </label>
       <label class="field">
-        <span class="label">Estado</span>
+        <span class="label">Disponibilidad</span>
         <select class="input" bind:value={f.estado}>
           {#each Object.entries(ESTADOS_MAQUINA) as [valor, texto]}<option value={valor}>{texto}</option>{/each}
         </select>

@@ -10,6 +10,8 @@
   import Modal from '../lib/Modal.svelte';
   import Tarjeta from '../lib/Tarjeta.svelte';
   import Icono from '../lib/Icono.svelte';
+  import CampoTelefono from '../lib/CampoTelefono.svelte';
+  import { telefonoValido } from '../lib/datos.js';
   import Estrellas from '../lib/Estrellas.svelte';
   import Calendario from '../lib/Calendario.svelte';
 
@@ -68,8 +70,12 @@
 
   async function solicitar() {
     error = '';
-    if (!nombre.trim() || !telefono.trim()) {
-      error = 'Escribe tu nombre y teléfono.';
+    if (!nombre.trim()) {
+      error = 'Escribe tu nombre.';
+      return;
+    }
+    if (!telefonoValido(telefono)) {
+      error = 'El teléfono debe tener 10 dígitos.';
       return;
     }
     if (!inicio) {
@@ -257,11 +263,11 @@
       </div>
       <label class="field">
         <span class="label">Nombre de contacto</span>
-        <input class="input" type="text" bind:value={nombre} />
+        <input class="input" type="text" maxlength="120" autocomplete="name" bind:value={nombre} />
       </label>
       <label class="field">
         <span class="label">Teléfono / WhatsApp</span>
-        <input class="input" type="tel" bind:value={telefono} placeholder="9991234567" />
+        <CampoTelefono bind:value={telefono} />
       </label>
       <div class="field span-2 total-box total-row">
         <div>
@@ -275,8 +281,8 @@
         </div>
       </div>
       <label class="field span-2">
-        <span class="label">Mensaje (opcional)</span>
-        <textarea class="input" rows="3" bind:value={mensaje} placeholder="Lugar de la obra, horario de entrega, dudas…"></textarea>
+        <span class="label label-row">Mensaje (opcional) <em>{mensaje.length}/1000</em></span>
+        <textarea class="input" rows="3" maxlength="1000" bind:value={mensaje} placeholder="Lugar de la obra, horario de entrega, dudas…"></textarea>
       </label>
       {#if error}<p class="form-error span-2" in:fly={{ y: -4 }}>{error}</p>{/if}
     </form>

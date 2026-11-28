@@ -3,7 +3,8 @@
   import { usuario, sesion } from '../lib/sesion.js';
   import { api } from '../lib/api.js';
   import { toast } from '../lib/ui.js';
-  import { formatoFecha, iniciales } from '../lib/datos.js';
+  import { formatoFecha, iniciales, telefonoValido } from '../lib/datos.js';
+  import CampoTelefono from '../lib/CampoTelefono.svelte';
   import Icono from '../lib/Icono.svelte';
 
   let nombre = $usuario?.nombre || '';
@@ -23,6 +24,7 @@
   async function guardar() {
     error = '';
     if (!nombre.trim()) return (error = 'El nombre no puede quedar vacío.');
+    if (telefono && !telefonoValido(telefono)) return (error = 'El teléfono debe tener 10 dígitos.');
     guardando = true;
     try {
       const u = await api('/auth/perfil', { method: 'PUT', body: { nombre, empresa, telefono } });
@@ -94,7 +96,7 @@
       {/if}
       <label class="field">
         <span class="label">Teléfono / WhatsApp</span>
-        <input class="input" type="tel" bind:value={telefono} placeholder="9991234567" autocomplete="tel" />
+        <CampoTelefono bind:value={telefono} />
         <span class="muted small">Se usa para llenar tus solicitudes y para que te contacten cuando acepten una renta.</span>
       </label>
       <label class="field">

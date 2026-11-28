@@ -75,6 +75,15 @@ export function formatoFecha(f) {
   return new Date(f).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// Celular de México: solo dígitos, máximo 10 (quita +52 / 521 si lo pegan con lada internacional)
+export function limpiarTelefono(v) {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (d.length > 10 && d.startsWith('521')) d = d.slice(3);
+  else if (d.length > 10 && d.startsWith('52')) d = d.slice(2);
+  return d.slice(0, 10);
+}
+export const telefonoValido = (v) => /^\d{10}$/.test(String(v ?? ''));
+
 export function whatsapp(tel) {
   let d = String(tel || '').replace(/\D/g, '');
   if (d.length === 10) d = '52' + d;

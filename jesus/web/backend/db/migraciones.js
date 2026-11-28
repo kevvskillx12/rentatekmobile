@@ -16,6 +16,13 @@ export async function migrar(db) {
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS suspendido boolean NOT NULL DEFAULT false;
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_hash text;
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS reset_expira timestamptz;
+    -- Verificación automática con la INE: datos calculados y validados (no se guarda la foto)
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nombre_legal text;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS curp text;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rfc text;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS fecha_nacimiento date;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS verificado_en timestamptz;
+    CREATE UNIQUE INDEX IF NOT EXISTS usuarios_curp_unica ON usuarios (curp) WHERE curp IS NOT NULL;
     ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
     ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN ('cliente', 'proveedor', 'admin'));
 

@@ -71,6 +71,7 @@
           <p class="page-sub">
             {ROLES[$usuario.rol]}
             {#if $usuario.verificado}· <span class="verif"><Icono nombre="shield" tam={12} /> Verificado</span>{/if}
+            {#if $usuario.rfc}· RFC <span class="mono">{$usuario.rfc}</span>{/if}
             {#if $usuario.created_at}· Miembro desde {formatoFecha($usuario.created_at)}{/if}
           </p>
         </div>

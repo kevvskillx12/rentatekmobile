@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { migrar } from './db/migraciones.js';
 import { enviarCorreo, correoActivo } from './correo.js';
+import { verificarIdentidad } from './identidad.js';
 
 const { DATABASE_URL, JWT_SECRET, PORT = 3001, CORS_ORIGIN, APP_URL = 'http://localhost:5173' } = process.env;
 if (!DATABASE_URL || !JWT_SECRET) {
@@ -39,7 +40,7 @@ function firmar(u) {
 function publico(u) {
   return {
     id: u.id, nombre: u.nombre, email: u.email, rol: u.rol, empresa: u.empresa,
-    telefono: u.telefono, verificado: u.verificado, created_at: u.created_at
+    telefono: u.telefono, verificado: u.verificado, created_at: u.created_at, rfc: u.rfc ?? null
   };
 }
 
@@ -530,6 +531,21 @@ proveedor.patch('/maquinaria/:id/estado', ah(async (req, res) => {
   res.json(rows[0]);
 }));
 
+// Verificación automática: la app lee la INE (OCR en el dispositivo) y manda nombre, apellidos y CURP.
+// Aquí se valida la CURP, que coincida con el nombre, la mayoría de edad, y se calcula el RFC con homoclave.
+proveedor.post('/verificacion', ah(async (req, res) => {
+  const { error, datos } = verificarIdentidad(req.body);
+  if (error) return res.status(400).json({ error });
+  const { rows: [otro] } = await pool.query('SELECT 1 FROM usuarios WHERE curp = $1 AND id <> $2', [datos.curp, req.usuario.id]);
+  if (otro) return res.status(409).json({ error: 'Esa CURP ya está registrada en otra cuenta.' });
+  const { rows: [u] } = await pool.query(
+    `UPDATE usuarios SET nombre_legal = $1, curp = $2, rfc = $3, fecha_nacimiento = $4, verificado = true, verificado_en = now()
+     WHERE id = $5 RETURNING *`,
+    [datos.nombre_legal, datos.curp, datos.rfc, datos.fecha_nacimiento, req.usuario.id]);
+  notificar(u.id, { tipo: 'verificado', titulo: '¡Tu cuenta fue verificada!', mensaje: `Verificamos tu identidad. Tu RFC es ${datos.rfc}. Tus equipos ya muestran la insignia de proveedor verificado.`, enlace: '#/panel' });
+  res.json(publico(u));
+}));
+
 // Foto del equipo: se guarda en PostgreSQL (BYTEA), igual que en el backend de Kevin,
 // así las fotos subidas desde la app Flutter o desde esta web se ven en ambas.
 proveedor.put('/maquinaria/:id/foto', express.raw({ type: 'image/*', limit: '4mb' }), ah(async (req, res) => {
@@ -758,6 +774,7 @@ admin.get('/usuarios', ah(async (req, res) => {
   }
   const { rows } = await pool.query(
     `SELECT u.id, u.nombre, u.email, u.rol, u.empresa, u.telefono, u.verificado, u.suspendido, u.created_at,
+            u.nombre_legal, u.curp, u.rfc, u.verificado_en,
             (SELECT count(*)::int FROM maquinaria WHERE proveedor_id = u.id) AS maquinas,
             (SELECT count(*)::int FROM solicitudes WHERE cliente_id = u.id) AS solicitudes,
             (SELECT round(avg(calificacion), 1)::float FROM resenas WHERE proveedor_id = u.id) AS promedio

@@ -15,7 +15,7 @@
     ] },
     { g: 'Para proveedores', items: [
       ['¿Cómo publico mi maquinaria?', 'Crea una cuenta eligiendo "Ofrezco maquinaria" y en tu panel toca "Publicar equipo". Llena nombre, categoría, ciudad, precio por día y especificaciones.'],
-      ['¿Qué significa "Proveedor verificado"?', 'Que nuestro equipo revisó tu identidad o RFC. Tus equipos muestran una insignia que da más confianza. Solicítala desde la página de contacto.'],
+      ['¿Qué significa "Proveedor verificado"?', 'Que validamos tu identidad con tu INE: tu CURP, que coincida con tu nombre y tu RFC. Tus equipos muestran una insignia que da más confianza. Hazlo desde tu panel con una foto de tu INE; es automático e inmediato.'],
       ['¿Qué pasa cuando acepto una solicitud?', 'El cliente recibe un aviso y esas fechas quedan bloqueadas en el calendario del equipo para que nadie más las pida.'],
       ['¿Dónde veo cuánto he ganado?', 'En la pestaña "Resumen" de tu panel está la gráfica de ingresos por mes; también puedes verla como tabla.']
     ] },

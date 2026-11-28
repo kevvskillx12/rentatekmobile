@@ -990,7 +990,8 @@ input[type='range'] { accent-color: var(--brand); width: 100%; }
 
 .notice-warn { background: var(--warn-soft); color: var(--warn); }
 .notice-warn a { color: inherit; }
-.aviso-verif { margin-bottom: 18px; }
+.aviso-verif { margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
+.aviso-verif span { flex: 1 1 260px; }
 .grafica-card { margin-bottom: 20px; }
 .avatar-xl { width: 64px; height: 64px; font-size: 22px; background: var(--brand); color: #172033; }
 .link-btn.olvide { align-self: flex-end; margin-top: -4px; }

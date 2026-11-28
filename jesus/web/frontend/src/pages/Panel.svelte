@@ -11,6 +11,7 @@
   import Chat from '../lib/Chat.svelte';
   import Estrellas from '../lib/Estrellas.svelte';
   import GraficaIngresos from '../lib/GraficaIngresos.svelte';
+  import VerificarIdentidad from '../lib/VerificarIdentidad.svelte';
   import {
     normalizar, formatoPrecio, formatoDinero, formatoCompacto, formatoFecha, formatoRango, whatsapp,
     ESTADOS_MAQUINA, ESTADOS_SOLICITUD
@@ -38,6 +39,7 @@
   let f = vacio();
   let error = '';
   let guardando = false;
+  let verificarAbierto = false;
   let foto = null; // archivo elegido para subir
   let fotoVista = ''; // vista previa (foto nueva o la actual)
   let quitarFoto = false;
@@ -314,7 +316,8 @@
       <div class="notice notice-warn aviso-verif">
         <Icono nombre="shield" tam={16} />
         <span>Tu cuenta aún no está verificada. Los proveedores verificados muestran una insignia que da más confianza a los clientes.
-          Envíanos tu RFC o identificación desde <a href="#/contacto">contacto</a> para verificarte.</span>
+          Solo toma una foto de tu INE y se verifica al instante.</span>
+        <button class="btn btn-sm btn-primary" on:click={() => (verificarAbierto = true)}>Verificar ahora</button>
       </div>
     {/if}
     {#if cargando}
@@ -586,6 +589,8 @@
       </button>
     </svelte:fragment>
   </Modal>
+
+  <VerificarIdentidad open={verificarAbierto} on:close={() => (verificarAbierto = false)} />
 
   <!-- Modal: detalle de solicitud -->
   <Modal open={!!detalle} ancho="lg" titulo="Solicitud de renta" subtitulo={detalle?.maquina_nombre || ''} on:close={() => (detalle = null)}>

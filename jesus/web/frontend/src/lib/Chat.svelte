@@ -4,11 +4,13 @@
   import { usuario } from './sesion.js';
   import { haceTiempo } from './datos.js';
   import { cargarNotifs } from './notificaciones.js';
+  import { cargarConversaciones } from './mensajes.js';
   import Icono from './Icono.svelte';
 
   // Conversación entre cliente y proveedor dentro de una solicitud
   export let solicitudId;
   export let otro = ''; // nombre de la otra persona
+  export let alto = '280px'; // alto del área de mensajes
 
   let mensajes = [];
   let texto = '';
@@ -25,6 +27,7 @@
       mensajes = nuevos;
       error = '';
       if (cambio || scroll) { await tick(); bajar(); }
+      if (cambio) cargarConversaciones(); // actualiza el contador de no leídos del menú
     } catch (e) {
       error = e.message;
     } finally {
@@ -44,6 +47,7 @@
       await api(`/solicitudes/${solicitudId}/mensajes`, { method: 'POST', body: { texto: t } });
       texto = '';
       await cargar(true);
+      cargarConversaciones();
     } catch (e) {
       error = e.message;
     } finally {
@@ -66,7 +70,7 @@
 </script>
 
 <div class="chat">
-  <div class="chat-msgs" bind:this={caja}>
+  <div class="chat-msgs" style="height: {alto}" bind:this={caja}>
     {#if cargando}
       <p class="muted small center">Cargando conversación…</p>
     {:else if mensajes.length === 0}

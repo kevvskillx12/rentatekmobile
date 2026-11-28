@@ -14,6 +14,8 @@
   import Admin from './pages/Admin.svelte';
   import Info from './pages/Info.svelte';
   import Contacto from './pages/Contacto.svelte';
+  import Mensajes from './pages/Mensajes.svelte';
+  import { noLeidosChat } from './lib/mensajes.js';
   import Avisos from './lib/Avisos.svelte';
   import Icono from './lib/Icono.svelte';
   import Campana from './lib/Campana.svelte';
@@ -91,6 +93,9 @@
       {#if enlacePanel}
         <a href={enlacePanel.href} class:active={pagina === enlacePanel.pag}>{enlacePanel.texto}</a>
       {/if}
+      {#if rol === 'cliente' || rol === 'proveedor'}
+        <a href="#/mensajes" class:active={pagina === 'mensajes'}>Mensajes{#if $noLeidosChat} <span class="count">{$noLeidosChat}</span>{/if}</a>
+      {/if}
       {#if rol === 'cliente'}
         <a href="#/favoritos" class:active={pagina === 'favoritos'}>Favoritos</a>
       {/if}
@@ -120,6 +125,7 @@
               {#if enlacePanel}
                 <a href={enlacePanel.href}><Icono nombre={enlacePanel.i} tam={16} /> {enlacePanel.texto}</a>
               {/if}
+              {#if rol === 'cliente' || rol === 'proveedor'}<a href="#/mensajes"><Icono nombre="chat" tam={16} /> Mensajes{#if $noLeidosChat} <span class="count">{$noLeidosChat}</span>{/if}</a>{/if}
               <a href="#/perfil"><Icono nombre="user" tam={16} /> Mi perfil</a>
               {#if rol === 'cliente'}<a href="#/favoritos"><Icono nombre="heart" tam={16} /> Favoritos</a>{/if}
               <a href="#/ayuda"><Icono nombre="help" tam={16} /> Ayuda</a>
@@ -143,6 +149,7 @@
       <a href="#/catalogo" class:active={pagina === 'catalogo'}>Catálogo</a>
       {#if $usuario}
         {#if enlacePanel}<a href={enlacePanel.href} class:active={pagina === enlacePanel.pag}>{enlacePanel.texto}</a>{/if}
+        {#if rol === 'cliente' || rol === 'proveedor'}<a href="#/mensajes" class:active={pagina === 'mensajes'}>Mensajes{#if $noLeidosChat} <span class="count">{$noLeidosChat}</span>{/if}</a>{/if}
         {#if rol === 'cliente'}<a href="#/favoritos" class:active={pagina === 'favoritos'}>Favoritos</a>{/if}
         <a href="#/perfil" class:active={pagina === 'perfil'}>Mi perfil</a>
         <a href="#/ayuda" class:active={pagina === 'ayuda'}>Ayuda</a>
@@ -180,6 +187,8 @@
         <Info {pagina} />
       {:else if pagina === 'contacto'}
         <Contacto />
+      {:else if pagina === 'mensajes'}
+        <Mensajes solicitudId={parametro} />
       {:else}
         <Inicio />
       {/if}

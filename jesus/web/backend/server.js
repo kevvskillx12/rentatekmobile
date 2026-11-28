@@ -426,6 +426,27 @@ async function accesoSolicitud(solId, usuarioId) {
   return s;
 }
 
+// Bandeja de mensajes: una conversación por renta, con el último mensaje y los no leídos
+app.get('/api/conversaciones', auth(), ah(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT s.id, s.estado, s.maquina_id, to_char(s.fecha_inicio, 'YYYY-MM-DD') AS fecha_inicio, to_char(s.fecha_fin, 'YYYY-MM-DD') AS fecha_fin,
+            m.nombre AS maquina_nombre, m.categoria, (m.foto IS NOT NULL) AS tiene_foto, m.foto_v, cat.imagen AS categoria_imagen,
+            (s.cliente_id = $1) AS soy_cliente,
+            CASE WHEN s.cliente_id = $1 THEN COALESCE(NULLIF(p.empresa, ''), p.nombre) ELSE COALESCE(NULLIF(s.nombre_contacto, ''), c.nombre) END AS otro_nombre,
+            ult.texto AS ultimo_texto, ult.created_at AS ultimo_en, (ult.autor_id = $1) AS ultimo_mio,
+            (SELECT count(*)::int FROM mensajes mj WHERE mj.solicitud_id = s.id AND mj.autor_id <> $1 AND NOT mj.leido) AS no_leidos
+     FROM solicitudes s
+     JOIN maquinaria m ON m.id = s.maquina_id
+     JOIN usuarios p ON p.id = m.proveedor_id
+     JOIN usuarios c ON c.id = s.cliente_id
+     LEFT JOIN categorias cat ON cat.nombre = m.categoria
+     LEFT JOIN LATERAL (SELECT texto, created_at, autor_id FROM mensajes WHERE solicitud_id = s.id ORDER BY id DESC LIMIT 1) ult ON true
+     WHERE s.cliente_id = $1 OR m.proveedor_id = $1
+     ORDER BY COALESCE(ult.created_at, s.created_at) DESC
+     LIMIT 200`, [req.usuario.id]);
+  res.json(rows);
+}));
+
 app.get('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
   const s = await accesoSolicitud(id(req.params.id), req.usuario.id);
   if (!s) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -446,7 +467,7 @@ app.post('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
     'INSERT INTO mensajes (solicitud_id, autor_id, texto) VALUES ($1, $2, $3) RETURNING *', [s.id, req.usuario.id, t]);
 
   const destino = req.usuario.id === s.cliente_id ? s.proveedor_id : s.cliente_id;
-  const enlace = destino === s.cliente_id ? `#/mis-rentas/${s.id}` : `#/panel/solicitud/${s.id}`;
+  const enlace = `#/mensajes/${s.id}`; // abre la conversación en el apartado Mensajes
   // Una sola notificación sin leer por conversación, para no saturar
   const { rows: [ya] } = await pool.query(
     `SELECT 1 FROM notificaciones WHERE usuario_id = $1 AND tipo = 'mensaje' AND enlace = $2 AND NOT leida`, [destino, enlace]);

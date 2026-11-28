@@ -458,6 +458,14 @@ async function avisarMensaje(s, autorId, resumen) {
   notificar(destino, { tipo: 'mensaje', titulo: `Nuevo mensaje de ${autor.nombre.split(' ')[0]}`, mensaje: `Sobre "${s.maquina_nombre}": ${resumen.slice(0, 120)}`, enlace });
 }
 
+// Id del mensaje al que se responde, solo si pertenece a la misma conversación (si no, null)
+async function respuestaValida(valor, solicitudId) {
+  const rid = id(valor);
+  if (!rid) return null;
+  const { rows: [r] } = await pool.query('SELECT 1 FROM mensajes WHERE id = $1 AND solicitud_id = $2', [rid, solicitudId]);
+  return r ? rid : null;
+}
+
 const TIPOS_AUDIO = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/mpeg', 'audio/wav'];
 const duracion = (seg) => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
 
@@ -467,8 +475,11 @@ app.get('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
   await pool.query('UPDATE mensajes SET leido = true WHERE solicitud_id = $1 AND autor_id <> $2 AND NOT leido', [s.id, req.usuario.id]);
   const { rows } = await pool.query(
     `SELECT mj.id, mj.autor_id, mj.texto, mj.created_at, u.nombre AS autor_nombre,
-            (mj.audio IS NOT NULL) AS tiene_audio, mj.audio_seg
+            (mj.audio IS NOT NULL) AS tiene_audio, mj.audio_seg,
+            mj.respuesta_a, r.autor_id AS resp_autor_id, ru.nombre AS resp_autor_nombre, r.texto AS resp_texto, (r.audio IS NOT NULL) AS resp_audio
      FROM mensajes mj JOIN usuarios u ON u.id = mj.autor_id
+     LEFT JOIN mensajes r ON r.id = mj.respuesta_a
+     LEFT JOIN usuarios ru ON ru.id = r.autor_id
      WHERE mj.solicitud_id = $1 ORDER BY mj.created_at, mj.id`, [s.id]);
   res.json(rows);
 }));
@@ -478,8 +489,9 @@ app.post('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
   if (!s) return res.status(404).json({ error: 'Conversación no encontrada.' });
   const t = texto(req.body.texto, 2000);
   if (!t) return res.status(400).json({ error: 'Escribe un mensaje.' });
+  const resp = await respuestaValida(req.body.respuesta_a, s.id);
   const { rows: [msg] } = await pool.query(
-    'INSERT INTO mensajes (solicitud_id, autor_id, texto) VALUES ($1, $2, $3) RETURNING *', [s.id, req.usuario.id, t]);
+    'INSERT INTO mensajes (solicitud_id, autor_id, texto, respuesta_a) VALUES ($1, $2, $3, $4) RETURNING id, created_at', [s.id, req.usuario.id, t, resp]);
   avisarMensaje(s, req.usuario.id, t);
   res.status(201).json(msg);
 }));
@@ -494,8 +506,8 @@ app.post('/api/solicitudes/:id/audio', auth(), express.raw({ type: 'audio/*', li
   const seg = Math.min(300, Math.max(1, Math.round(Number(req.query.seg) || 1)));
   const t = `🎤 Mensaje de voz (${duracion(seg)})`;
   const { rows: [msg] } = await pool.query(
-    'INSERT INTO mensajes (solicitud_id, autor_id, texto, audio, audio_tipo, audio_seg) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at',
-    [s.id, req.usuario.id, t, req.body, tipo, seg]);
+    'INSERT INTO mensajes (solicitud_id, autor_id, texto, audio, audio_tipo, audio_seg, respuesta_a) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at',
+    [s.id, req.usuario.id, t, req.body, tipo, seg, await respuestaValida(req.query.respuesta_a, s.id)]);
   avisarMensaje(s, req.usuario.id, t);
   res.status(201).json(msg);
 }));

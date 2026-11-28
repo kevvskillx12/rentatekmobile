@@ -86,6 +86,8 @@ export async function migrar(db) {
     ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio bytea;
     ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_tipo text;
     ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_seg int;
+    -- Respuesta a otro mensaje de la misma conversación (si se borra el original, queda sin cita)
+    ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS respuesta_a int REFERENCES mensajes(id) ON DELETE SET NULL;
 
     -- Peticiones del cliente para extender una renta aceptada (más días)
     CREATE TABLE IF NOT EXISTS extensiones (

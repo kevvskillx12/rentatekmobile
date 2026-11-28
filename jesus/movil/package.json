@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "App Android de Rentatek (Capacitor) que empaqueta la web de ../web/frontend",
   "scripts": {
-    "web": "npm --prefix ../web/frontend run build",
+    "web": "cross-env CAPACITOR=1 VITE_API_URL=https://rentatek-jesus-api.onrender.com npm --prefix ../web/frontend run build",
     "sync": "cap sync android",
     "apk": "npm run web && cap sync android && cd android && gradlew.bat assembleDebug"
   },
@@ -13,6 +13,7 @@
     "@capacitor/core": "^8.6.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.6.3"
+    "@capacitor/cli": "^8.6.3",
+    "cross-env": "^7.0.3"
   }
 }

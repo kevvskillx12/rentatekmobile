@@ -10,6 +10,9 @@ export default defineConfig({
   plugins: [
     svelte(),
     VitePWA({
+      // En el APK (CAPACITOR=1) no se usa caché offline: el service worker se autodestruye y borra
+      // la caché vieja, si no la app instalada seguiría mostrando la versión anterior.
+      selfDestroying: process.env.CAPACITOR === '1',
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'img/*.jpg', 'img/*.jpeg'],
       workbox: { navigateFallbackDenylist: [/^\/api/] },

@@ -8,6 +8,7 @@
   import { api } from './api.js';
   import { sesion } from './sesion.js';
   import { toast } from './ui.js';
+  import { esTactil } from './imagen.js';
 
   export let open = false;
   const dispatch = createEventDispatcher();
@@ -85,8 +86,14 @@
         <li>La foto se procesa en tu dispositivo y no se guarda.</li>
       </ul>
       {#if error}<p class="form-error" in:fly={{ y: -4 }}>{error}</p>{/if}
-      <label class="btn btn-primary btn-block verif-boton">
-        <Icono nombre="shield" tam={16} /> Tomar o subir foto de mi INE
+      {#if esTactil}
+        <label class="btn btn-primary btn-block verif-boton">
+          <Icono nombre="shield" tam={16} /> Tomar foto de mi INE
+          <input type="file" accept="image/*" capture="environment" hidden on:change={elegir} />
+        </label>
+      {/if}
+      <label class="btn btn-block verif-boton" class:btn-primary={!esTactil} class:btn-ghost={esTactil}>
+        {#if !esTactil}<Icono nombre="shield" tam={16} />{/if} {esTactil ? 'Elegir de la galería' : 'Subir foto de mi INE'}
         <input type="file" accept="image/*" hidden on:change={elegir} />
       </label>
     </div>
@@ -106,7 +113,7 @@
       <label class="field span-2"><span class="label">CURP</span><input class="input mono" maxlength="18" bind:value={datos.curp} /></label>
       {#if error}<p class="form-error span-2" in:fly={{ y: -4 }}>{error}</p>{/if}
       <div class="span-2 verif-acciones">
-        <label class="btn btn-ghost">Usar otra foto<input type="file" accept="image/*" hidden on:change={elegir} /></label>
+        <label class="btn btn-ghost">Usar otra foto<input type="file" accept="image/*" capture={esTactil ? 'environment' : undefined} hidden on:change={elegir} /></label>
         <button class="btn btn-primary" type="submit" disabled={enviando}>
           {#if enviando}<span class="spinner"></span>{/if} Verificar
         </button>

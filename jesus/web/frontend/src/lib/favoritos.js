@@ -6,7 +6,7 @@ import { toast } from './ui.js';
 export const favoritos = writable(new Set());
 
 usuario.subscribe(async (u) => {
-  if (!u) return favoritos.set(new Set());
+  if (!u || u.rol !== 'cliente') return favoritos.set(new Set()); // solo los clientes usan favoritos
   try {
     favoritos.set(new Set(await api('/favoritos/ids')));
   } catch {

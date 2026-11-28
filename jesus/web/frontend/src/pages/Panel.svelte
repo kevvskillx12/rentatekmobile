@@ -19,6 +19,7 @@
   } from '../lib/datos.js';
 
   export let solicitudId = '';
+  export let editarId = ''; // viene de "Editar este equipo" en el detalle
 
   let pestana = 'resumen'; // resumen | solicitudes | equipos
   let resumen = null;
@@ -77,6 +78,12 @@
     cargarTodo().then(() => {
       const s = solicitudes.find((x) => String(x.id) === String(solicitudId));
       if (s) abrirDetalle(s);
+      const eq = equipos.find((x) => String(x.id) === String(editarId));
+      if (eq) {
+        pestana = 'equipos';
+        editar(eq);
+        history.replaceState(null, '', '#/panel'); // que al recargar no se vuelva a abrir
+      }
     });
     // Al volver a la pestaña del navegador se traen las solicitudes nuevas
     const alVolver = () => document.visibilityState === 'visible' && cargarTodo();

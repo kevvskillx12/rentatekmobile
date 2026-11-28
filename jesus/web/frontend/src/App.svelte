@@ -70,6 +70,9 @@
         ? { href: '#/admin', texto: 'Administración', pag: 'admin', i: 'settings' }
         : null;
   const ROLES = { cliente: 'Cliente', proveedor: 'Proveedor', admin: 'Administrador' };
+
+  // Favoritos solo existe para clientes: si un proveedor o admin entra por enlace, se le manda al catálogo
+  $: if (pagina === 'favoritos' && rol && rol !== 'cliente') window.location.hash = '#/catalogo';
 </script>
 
 <svelte:window
@@ -88,7 +91,7 @@
       {#if enlacePanel}
         <a href={enlacePanel.href} class:active={pagina === enlacePanel.pag}>{enlacePanel.texto}</a>
       {/if}
-      {#if $usuario && rol !== 'admin'}
+      {#if rol === 'cliente'}
         <a href="#/favoritos" class:active={pagina === 'favoritos'}>Favoritos</a>
       {/if}
     </nav>
@@ -118,7 +121,7 @@
                 <a href={enlacePanel.href}><Icono nombre={enlacePanel.i} tam={16} /> {enlacePanel.texto}</a>
               {/if}
               <a href="#/perfil"><Icono nombre="user" tam={16} /> Mi perfil</a>
-              {#if rol !== 'admin'}<a href="#/favoritos"><Icono nombre="heart" tam={16} /> Favoritos</a>{/if}
+              {#if rol === 'cliente'}<a href="#/favoritos"><Icono nombre="heart" tam={16} /> Favoritos</a>{/if}
               <a href="#/ayuda"><Icono nombre="help" tam={16} /> Ayuda</a>
               <button on:click={cerrarSesion}><Icono nombre="logout" tam={16} /> Cerrar sesión</button>
             </div>
@@ -140,7 +143,7 @@
       <a href="#/catalogo" class:active={pagina === 'catalogo'}>Catálogo</a>
       {#if $usuario}
         {#if enlacePanel}<a href={enlacePanel.href} class:active={pagina === enlacePanel.pag}>{enlacePanel.texto}</a>{/if}
-        {#if rol !== 'admin'}<a href="#/favoritos" class:active={pagina === 'favoritos'}>Favoritos</a>{/if}
+        {#if rol === 'cliente'}<a href="#/favoritos" class:active={pagina === 'favoritos'}>Favoritos</a>{/if}
         <a href="#/perfil" class:active={pagina === 'perfil'}>Mi perfil</a>
         <a href="#/ayuda" class:active={pagina === 'ayuda'}>Ayuda</a>
         <button on:click={cerrarSesion}>Cerrar sesión</button>
@@ -162,7 +165,7 @@
       {:else if pagina === 'acceso'}
         <Acceso />
       {:else if pagina === 'panel'}
-        <Panel solicitudId={parametro === 'solicitud' ? parametro2 : ''} />
+        <Panel solicitudId={parametro === 'solicitud' ? parametro2 : ''} editarId={parametro === 'editar' ? parametro2 : ''} />
       {:else if pagina === 'mis-rentas'}
         <MisRentas solicitudId={parametro} />
       {:else if pagina === 'perfil'}
@@ -194,7 +197,7 @@
       <h4>Explorar</h4>
       <a href="#/">Inicio</a>
       <a href="#/catalogo">Catálogo</a>
-      {#if $usuario && rol !== 'admin'}<a href="#/favoritos">Favoritos</a>{/if}
+      {#if rol === 'cliente'}<a href="#/favoritos">Favoritos</a>{/if}
     </div>
     <div>
       <h4>Cuenta</h4>

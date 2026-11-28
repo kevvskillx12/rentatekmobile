@@ -22,6 +22,10 @@ sesion.subscribe((valor) => {
 
 export const usuario = derived(sesion, ($s) => $s?.usuario ?? null);
 
+// Favoritos es para quien renta: clientes y visitantes (a estos se les pide iniciar sesión).
+// Proveedores y administradores no rentan, así que no lo ven.
+export const usaFavoritos = derived(usuario, ($u) => !$u || $u.rol === 'cliente');
+
 try {
   localStorage.removeItem('rentatek_usuario');
   localStorage.removeItem('rentatek_usuarios');

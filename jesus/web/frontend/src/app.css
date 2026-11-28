@@ -1076,3 +1076,9 @@ input[type='range'] { accent-color: var(--brand); width: 100%; }
 .ubic-selects { display: grid; gap: 8px; }
 .ubic-selects select { min-width: 0; text-overflow: ellipsis; }
 .ubic-selects select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Etiqueta en las tarjetas de los equipos propios (vista del proveedor) */
+.badge-propio {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  background: var(--navy); color: #fff; box-shadow: var(--sh-sm);
+}

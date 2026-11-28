@@ -1,6 +1,7 @@
 <script>
   import { formatoDinero, ESTADOS_MAQUINA } from './datos.js';
   import { favoritos, alternarFavorito } from './favoritos.js';
+  import { usaFavoritos, usuario } from './sesion.js';
   import Icono from './Icono.svelte';
   import Estrellas from './Estrellas.svelte';
   export let maquina;
@@ -12,10 +13,14 @@
   <div class="card-img">
     <img src={maquina.imagen} alt={maquina.nombre} loading="lazy" />
     <span class="badge badge-float estado-{maquina.estado}">{ESTADOS_MAQUINA[maquina.estado] || maquina.estado}</span>
-    <button class="fav-btn" class:on={fav} on:click|preventDefault|stopPropagation={() => alternarFavorito(maquina.id)}
-      aria-label={fav ? 'Quitar de favoritos' : 'Guardar en favoritos'} aria-pressed={fav}>
-      <Icono nombre="heart" tam={18} relleno={fav} />
-    </button>
+    {#if $usaFavoritos}
+      <button class="fav-btn" class:on={fav} on:click|preventDefault|stopPropagation={() => alternarFavorito(maquina.id)}
+        aria-label={fav ? 'Quitar de favoritos' : 'Guardar en favoritos'} aria-pressed={fav}>
+        <Icono nombre="heart" tam={18} relleno={fav} />
+      </button>
+    {:else if $usuario && $usuario.id === maquina.proveedorId}
+      <span class="badge badge-propio">Tu equipo</span>
+    {/if}
   </div>
 
   <div class="card-body">

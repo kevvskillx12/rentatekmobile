@@ -1,7 +1,7 @@
 <script>
   import { fly } from 'svelte/transition';
   import { api } from '../lib/api.js';
-  import { usuario } from '../lib/sesion.js';
+  import { usuario, usaFavoritos } from '../lib/sesion.js';
   import { favoritos, alternarFavorito } from '../lib/favoritos.js';
   import {
     normalizar, formatoDinero, formatoFecha, formatoRango, diasEntre, ESTADOS_MAQUINA, iniciales
@@ -194,10 +194,12 @@
             <p class="eyebrow">{maquina.categoria}</p>
             <div class="summary-acciones">
               <span class="badge estado-{maquina.estado}">{ESTADOS_MAQUINA[maquina.estado]}</span>
-              <button class="icon-btn fav-inline" class:on={fav} on:click={() => alternarFavorito(maquina.id)}
-                aria-label={fav ? 'Quitar de favoritos' : 'Guardar en favoritos'} aria-pressed={fav}>
-                <Icono nombre="heart" tam={20} relleno={fav} />
-              </button>
+              {#if $usaFavoritos}
+                <button class="icon-btn fav-inline" class:on={fav} on:click={() => alternarFavorito(maquina.id)}
+                  aria-label={fav ? 'Quitar de favoritos' : 'Guardar en favoritos'} aria-pressed={fav}>
+                  <Icono nombre="heart" tam={20} relleno={fav} />
+                </button>
+              {/if}
             </div>
           </div>
           <h1>{maquina.nombre}</h1>
@@ -235,8 +237,11 @@
           {/if}
           {#if !$usuario}
             <a class="btn btn-primary btn-lg btn-block" href="#/acceso">Inicia sesión para rentar</a>
+          {:else if $usuario.id === maquina.proveedorId}
+            <p class="muted small center">Este es tu equipo. Así lo ven los clientes en el catálogo.</p>
+            <a class="btn btn-primary btn-lg btn-block" href={`#/panel/editar/${maquina.id}`}><Icono nombre="edit" tam={17} /> Editar este equipo</a>
           {:else if $usuario.rol !== 'cliente'}
-            <div class="notice"><Icono nombre="alert" tam={16} /> Las solicitudes se envían desde una cuenta de cliente.</div>
+            <!-- Proveedores y admin no rentan: no se muestra nada para solicitar -->
           {:else}
             <button class="btn btn-primary btn-lg btn-block" on:click={abrir}><Icono nombre="calendar" tam={17} /> Elegir fechas y solicitar</button>
             <p class="muted small center">No se cobra nada al enviar la solicitud.</p>

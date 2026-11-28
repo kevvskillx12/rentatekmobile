@@ -95,7 +95,10 @@ function validarMaquina(b) {
   const estado = b.estado ?? 'disponible';
   if (!ESTADOS_MAQUINA.includes(estado)) return { error: 'Estado inválido.' };
   return {
-    datos: { nombre, categoria, ciudad, precio_dia: precio, descripcion: texto(b.descripcion), specs: limpiarSpecs(b.specs), estado }
+    datos: {
+      nombre, categoria, ciudad, precio_dia: precio, descripcion: texto(b.descripcion), specs: limpiarSpecs(b.specs), estado,
+      destacado: b.destacado === undefined ? null : !!b.destacado // null = no cambiarlo
+    }
   };
 }
 
@@ -106,7 +109,7 @@ function fechaValida(s) {
 // Columnas públicas de una máquina (sin la foto binaria) + datos del proveedor y calificación
 const SELECT_MAQUINA = `
   SELECT m.id, m.proveedor_id, m.nombre, m.categoria, m.ciudad, m.precio_dia, m.descripcion, m.specs,
-         m.estado, m.destacado, m.created_at,
+         m.estado, m.destacado, m.created_at, (m.foto IS NOT NULL) AS tiene_foto, m.foto_v,
          u.nombre AS proveedor_nombre, u.empresa AS proveedor_empresa, u.verificado AS proveedor_verificado,
          c.imagen AS categoria_imagen, r.promedio, COALESCE(r.resenas, 0) AS resenas
   FROM maquinaria m
@@ -314,6 +317,13 @@ app.get('/api/maquinaria/:id', ah(async (req, res) => {
   res.json({ ...m, ...prov });
 }));
 
+// Pública: se usa directo en <img src>. La URL lleva ?v= para refrescar la caché al cambiar la foto.
+app.get('/api/maquinaria/:id/foto', ah(async (req, res) => {
+  const { rows: [m] } = await pool.query('SELECT foto, foto_tipo FROM maquinaria WHERE id = $1', [id(req.params.id)]);
+  if (!m?.foto) return res.status(404).json({ error: 'Sin foto.' });
+  res.set({ 'Content-Type': m.foto_tipo, 'Cache-Control': 'public, max-age=31536000, immutable' }).send(m.foto);
+}));
+
 app.get('/api/maquinaria/:id/ocupadas', ah(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT to_char(fecha_inicio, 'YYYY-MM-DD') AS inicio, to_char(fecha_fin, 'YYYY-MM-DD') AS fin
@@ -475,7 +485,7 @@ proveedor.get('/ingresos', ah(async (req, res) => {
 proveedor.get('/maquinaria', ah(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT m.id, m.proveedor_id, m.nombre, m.categoria, m.ciudad, m.precio_dia, m.descripcion, m.specs, m.estado,
-            m.destacado, m.created_at, c.imagen AS categoria_imagen,
+            m.destacado, m.created_at, (m.foto IS NOT NULL) AS tiene_foto, m.foto_v, c.imagen AS categoria_imagen,
        (SELECT count(*)::int FROM solicitudes s WHERE s.maquina_id = m.id AND s.estado = 'pendiente') AS pendientes,
        (SELECT round(avg(calificacion), 1)::float FROM resenas WHERE maquina_id = m.id) AS promedio,
        (SELECT count(*)::int FROM resenas WHERE maquina_id = m.id) AS resenas
@@ -488,9 +498,10 @@ proveedor.post('/maquinaria', ah(async (req, res) => {
   const { error, datos } = validarMaquina(req.body);
   if (error) return res.status(400).json({ error });
   const { rows } = await pool.query(
-    `INSERT INTO maquinaria (proveedor_id, nombre, categoria, ciudad, precio_dia, descripcion, specs, estado)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [req.usuario.id, datos.nombre, datos.categoria, datos.ciudad, datos.precio_dia, datos.descripcion, datos.specs, datos.estado]
+    `INSERT INTO maquinaria (proveedor_id, nombre, categoria, ciudad, precio_dia, descripcion, specs, estado, destacado)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false)) RETURNING id`,
+    [req.usuario.id, datos.nombre, datos.categoria, datos.ciudad, datos.precio_dia, datos.descripcion, datos.specs, datos.estado,
+     datos.destacado]
   );
   res.status(201).json(rows[0]);
 }));
@@ -499,10 +510,11 @@ proveedor.put('/maquinaria/:id', ah(async (req, res) => {
   const { error, datos } = validarMaquina(req.body);
   if (error) return res.status(400).json({ error });
   const { rows } = await pool.query(
-    `UPDATE maquinaria SET nombre=$1, categoria=$2, ciudad=$3, precio_dia=$4, descripcion=$5, specs=$6, estado=$7
+    `UPDATE maquinaria SET nombre=$1, categoria=$2, ciudad=$3, precio_dia=$4, descripcion=$5, specs=$6, estado=$7,
+       destacado = COALESCE($10, destacado)
      WHERE id = $8 AND proveedor_id = $9 RETURNING id`,
     [datos.nombre, datos.categoria, datos.ciudad, datos.precio_dia, datos.descripcion, datos.specs, datos.estado,
-     id(req.params.id), req.usuario.id]
+     id(req.params.id), req.usuario.id, datos.destacado]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Maquinaria no encontrada.' });
   res.json(rows[0]);
@@ -516,6 +528,30 @@ proveedor.patch('/maquinaria/:id/estado', ah(async (req, res) => {
   );
   if (!rows[0]) return res.status(404).json({ error: 'Maquinaria no encontrada.' });
   res.json(rows[0]);
+}));
+
+// Foto del equipo: se guarda en PostgreSQL (BYTEA), igual que en el backend de Kevin,
+// así las fotos subidas desde la app Flutter o desde esta web se ven en ambas.
+proveedor.put('/maquinaria/:id/foto', express.raw({ type: 'image/*', limit: '4mb' }), ah(async (req, res) => {
+  const b = req.body;
+  if (!Buffer.isBuffer(b) || b.length < 12) return res.status(400).json({ error: 'Imagen inválida.' });
+  const tipo = b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg'
+    : b.subarray(1, 4).toString() === 'PNG' ? 'image/png'
+    : b.subarray(8, 12).toString() === 'WEBP' ? 'image/webp' : null;
+  if (!tipo) return res.status(415).json({ error: 'Formato no soportado (usa JPG, PNG o WEBP).' });
+  const { rows } = await pool.query(
+    'UPDATE maquinaria SET foto = $1, foto_tipo = $2, foto_v = foto_v + 1 WHERE id = $3 AND proveedor_id = $4 RETURNING foto_v',
+    [b, tipo, id(req.params.id), req.usuario.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Maquinaria no encontrada.' });
+  res.json({ ok: true, foto_v: rows[0].foto_v });
+}));
+
+proveedor.delete('/maquinaria/:id/foto', ah(async (req, res) => {
+  const { rowCount } = await pool.query(
+    'UPDATE maquinaria SET foto = NULL, foto_tipo = NULL, foto_v = foto_v + 1 WHERE id = $1 AND proveedor_id = $2',
+    [id(req.params.id), req.usuario.id]);
+  if (!rowCount) return res.status(404).json({ error: 'Maquinaria no encontrada.' });
+  res.status(204).end();
 }));
 
 proveedor.delete('/maquinaria/:id', ah(async (req, res) => {
@@ -782,6 +818,8 @@ app.get('/api/salud', ah(async (_req, res) => {
 }));
 
 app.use((err, _req, res, _next) => {
+  if (err.status === 413) return res.status(413).json({ error: 'La imagen es demasiado grande (máx. 4 MB).' });
+  if (err.status === 400) return res.status(400).json({ error: 'Petición inválida.' });
   console.error(err);
   res.status(500).json({ error: 'Error del servidor.' });
 });

@@ -38,9 +38,12 @@
   let f = vacio();
   let error = '';
   let guardando = false;
+  let foto = null; // archivo elegido para subir
+  let fotoVista = ''; // vista previa (foto nueva o la actual)
+  let quitarFoto = false;
 
   function vacio() {
-    return { nombre: '', categoria: $categorias[0]?.nombre || '', ciudad: '', precio_dia: '', descripcion: '', specs: '', estado: 'disponible' };
+    return { nombre: '', categoria: $categorias[0]?.nombre || '', ciudad: '', precio_dia: '', descripcion: '', specs: '', estado: 'disponible', destacado: false };
   }
 
   async function cargarTodo() {
@@ -131,6 +134,7 @@
     editandoId = null;
     f = vacio();
     error = '';
+    limpiarFoto();
     formAbierto = true;
   }
 
@@ -143,10 +147,43 @@
       precio_dia: eq.precio,
       descripcion: eq.descripcion,
       specs: specsATexto(eq.specsObj),
-      estado: eq.estado
+      estado: eq.estado,
+      destacado: eq.destacado
     };
     error = '';
+    limpiarFoto();
+    fotoVista = eq.tieneFoto ? eq.imagen : '';
     formAbierto = true;
+  }
+
+  function limpiarFoto() {
+    if (foto && fotoVista) URL.revokeObjectURL(fotoVista);
+    foto = null;
+    fotoVista = '';
+    quitarFoto = false;
+  }
+
+  function elegirFoto(e) {
+    const archivo = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!archivo) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(archivo.type)) {
+      error = 'La foto debe ser JPG, PNG o WEBP.';
+      return;
+    }
+    if (archivo.size > 4 * 1024 * 1024) {
+      error = 'La foto no debe pasar de 4 MB.';
+      return;
+    }
+    limpiarFoto();
+    error = '';
+    foto = archivo;
+    fotoVista = URL.createObjectURL(archivo);
+  }
+
+  function borrarFoto() {
+    limpiarFoto();
+    quitarFoto = true;
   }
 
   async function guardar() {
@@ -162,15 +199,17 @@
     guardando = true;
     const body = { ...f, precio_dia: Number(f.precio_dia), specs: textoASpecs(f.specs) };
     try {
-      if (editandoId) {
-        await api(`/proveedor/maquinaria/${editandoId}`, { method: 'PUT', body });
-        toast('Cambios guardados');
-      } else {
-        await api('/proveedor/maquinaria', { method: 'POST', body });
-        toast('Equipo publicado. Ya aparece en el catálogo.');
-        pestana = 'equipos';
-      }
+      const nuevo = !editandoId;
+      if (nuevo) editandoId = (await api("/proveedor/maquinaria", { method: "POST", body })).id; // si la foto falla, reintentar no duplica el equipo
+      else await api(`/proveedor/maquinaria/${editandoId}`, { method: "PUT", body });
+      if (foto) await api(`/proveedor/maquinaria/${editandoId}/foto`, { method: "PUT", body: foto });
+      else if (quitarFoto) await api(`/proveedor/maquinaria/${editandoId}/foto`, { method: "DELETE" });
+      if (nuevo) {
+        toast("Equipo publicado. Ya aparece en el catálogo.");
+        pestana = "equipos";
+      } else toast("Cambios guardados");
       formAbierto = false;
+      limpiarFoto();
       await Promise.all([cargarTodo(), recargarCatalogo()]);
     } catch (e) {
       error = e.message;
@@ -511,6 +550,27 @@
       <label class="field span-2">
         <span class="label">Descripción</span>
         <textarea class="input" rows="3" bind:value={f.descripcion} placeholder="Estado del equipo, si incluye operador, traslado…"></textarea>
+      </label>
+      <div class="field span-2">
+        <span class="label">Foto del equipo <em>JPG, PNG o WEBP, máx. 4 MB</em></span>
+        <div class="foto-equipo">
+          {#if fotoVista}
+            <img src={fotoVista} alt="Foto del equipo" />
+          {:else}
+            <div class="foto-vacia muted small">Sin foto: se muestra la imagen de la categoría</div>
+          {/if}
+          <div class="foto-botones">
+            <label class="btn btn-ghost">
+              {fotoVista ? "Cambiar foto" : "Subir foto"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" hidden on:change={elegirFoto} />
+            </label>
+            {#if fotoVista}<button type="button" class="btn btn-ghost" on:click={borrarFoto}>Quitar</button>{/if}
+          </div>
+        </div>
+      </div>
+      <label class="field span-2 check-destacado">
+        <input type="checkbox" bind:checked={f.destacado} />
+        <span>Destacar este equipo (aparece primero en el catálogo)</span>
       </label>
       <label class="field span-2">
         <span class="label">Especificaciones <em>una por línea, formato "Clave: valor"</em></span>

@@ -1059,3 +1059,14 @@ input[type='range'] { accent-color: var(--brand); width: 100%; }
 @media (max-width: 900px) {
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* Foto del equipo en el formulario del proveedor */
+.foto-equipo { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.foto-equipo img, .foto-vacia {
+  width: 160px; height: 110px; border-radius: var(--r); border: 1px solid var(--line);
+  object-fit: cover; background: var(--line-2);
+}
+.foto-vacia { display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px; }
+.foto-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.foto-botones label.btn { cursor: pointer; }
+.check-destacado { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }

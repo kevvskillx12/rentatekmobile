@@ -19,6 +19,12 @@ export async function migrar(db) {
     ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
     ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN ('cliente', 'proveedor', 'admin'));
 
+    -- Maquinaria: mismas columnas que el backend de Kevin (rentatek-api/schema.sql)
+    ALTER TABLE maquinaria ADD COLUMN IF NOT EXISTS destacado boolean NOT NULL DEFAULT false;
+    ALTER TABLE maquinaria ADD COLUMN IF NOT EXISTS foto bytea;
+    ALTER TABLE maquinaria ADD COLUMN IF NOT EXISTS foto_tipo text;
+    ALTER TABLE maquinaria ADD COLUMN IF NOT EXISTS foto_v int NOT NULL DEFAULT 0;
+
     -- Solicitudes con rango de fechas
     ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS fecha_inicio date;
     ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS fecha_fin date;

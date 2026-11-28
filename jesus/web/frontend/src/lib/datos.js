@@ -1,3 +1,5 @@
+import { BASE } from './api.js';
+
 // Imagen de respaldo por categoría (la principal viene de la tabla `categorias`)
 const IMAGENES = {
   'Grúas': '/img/Grua.jpeg',
@@ -41,7 +43,9 @@ export function normalizar(m) {
     specs: Object.entries(m.specs || {}).map(([k, v]) => (v ? `${k}: ${v}` : k)),
     specsObj: m.specs || {},
     proveedor: m.proveedor_empresa || m.proveedor_nombre || '',
-    imagen: m.categoria_imagen || imagenPara(m.categoria),
+    // Foto propia del equipo (guardada en la BD); si no tiene, la imagen de su categoría
+    imagen: m.tiene_foto ? `${BASE}/maquinaria/${m.id}/foto?v=${m.foto_v}` : m.categoria_imagen || imagenPara(m.categoria),
+    tieneFoto: !!m.tiene_foto,
     pendientes: m.pendientes ?? 0,
     proveedorId: m.proveedor_id,
     verificado: !!m.proveedor_verificado,

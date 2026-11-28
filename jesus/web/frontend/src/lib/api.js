@@ -3,20 +3,22 @@ import { sesion } from './sesion.js';
 
 // En desarrollo Vite redirige /api al backend (ver vite.config.js).
 // En producción define VITE_API_URL con la URL del backend.
-const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
+export const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
 
+// body puede ser un objeto (se manda como JSON) o un archivo/Blob (se manda crudo, p. ej. una foto).
 export async function api(ruta, { method = 'GET', body } = {}) {
   const headers = {};
   const s = get(sesion);
   if (s?.token) headers.Authorization = `Bearer ${s.token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const crudo = body instanceof Blob;
+  if (body !== undefined) headers['Content-Type'] = crudo ? body.type : 'application/json';
 
   let res;
   try {
     res = await fetch(BASE + ruta, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined
+      body: body === undefined ? undefined : crudo ? body : JSON.stringify(body)
     });
   } catch {
     throw new Error('No se pudo conectar con el servidor.');

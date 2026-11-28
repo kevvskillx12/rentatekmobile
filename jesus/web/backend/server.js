@@ -601,14 +601,63 @@ proveedor.get('/solicitudes', ah(async (req, res) => {
             m.nombre AS maquina_nombre, m.precio_dia, m.estado AS maquina_estado,
             c.nombre AS cliente_nombre, c.email AS cliente_email,
             r.calificacion AS resena_calificacion, r.comentario AS resena_comentario,
+            ext.id AS ext_id, to_char(ext.nueva_fin, 'YYYY-MM-DD') AS ext_nueva_fin, ext.dias_extra AS ext_dias, ext.estado AS ext_estado,
             (SELECT count(*)::int FROM mensajes mj WHERE mj.solicitud_id = s.id AND mj.autor_id <> $1 AND NOT mj.leido) AS no_leidos
      FROM solicitudes s
      JOIN maquinaria m ON m.id = s.maquina_id
      JOIN usuarios c ON c.id = s.cliente_id
      LEFT JOIN resenas r ON r.solicitud_id = s.id
+     LEFT JOIN LATERAL (SELECT * FROM extensiones e WHERE e.solicitud_id = s.id ORDER BY e.id DESC LIMIT 1) ext ON true
      WHERE m.proveedor_id = $1
-     ORDER BY (s.estado = 'pendiente') DESC, s.created_at DESC`, [req.usuario.id]);
+     ORDER BY (s.estado = 'pendiente' OR ext.estado = 'pendiente') DESC, s.created_at DESC`, [req.usuario.id]);
   res.json(rows);
+}));
+
+// Proveedor: aceptar o rechazar una petición de más días. Al aceptar, la misma renta se alarga.
+proveedor.patch('/extensiones/:id', ah(async (req, res) => {
+  const estado = req.body.estado;
+  if (!['aceptada', 'rechazada'].includes(estado)) return res.status(400).json({ error: 'Estado inválido.' });
+  const db = await pool.connect();
+  let e;
+  try {
+    await db.query('BEGIN');
+    ({ rows: [e] } = await db.query(
+      `SELECT e.id, e.solicitud_id, e.dias_extra, to_char(e.nueva_fin, 'YYYY-MM-DD') AS nueva_fin,
+              s.cliente_id, s.maquina_id, to_char(s.fecha_fin, 'YYYY-MM-DD') AS fecha_fin, m.nombre AS maquina_nombre, m.precio_dia
+       FROM extensiones e JOIN solicitudes s ON s.id = e.solicitud_id JOIN maquinaria m ON m.id = s.maquina_id
+       WHERE e.id = $1 AND m.proveedor_id = $2 AND e.estado = 'pendiente' FOR UPDATE OF e`,
+      [id(req.params.id), req.usuario.id]));
+    if (!e) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'La petición ya no está pendiente.' });
+    }
+    if (estado === 'aceptada') {
+      const { rows: [choque] } = await db.query(
+        `SELECT 1 FROM solicitudes WHERE maquina_id = $1 AND id <> $2 AND estado = 'aceptada'
+           AND fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL
+           AND daterange(fecha_inicio, fecha_fin, '[]') && daterange($3::date + 1, $4::date, '[]')`,
+        [e.maquina_id, e.solicitud_id, e.fecha_fin, e.nueva_fin]);
+      if (choque) {
+        await db.query('ROLLBACK');
+        return res.status(409).json({ error: 'Esos días ya están rentados a otro cliente. Rechaza la petición o platícalo por el chat.' });
+      }
+      await db.query('UPDATE solicitudes SET fecha_fin = $1, dias = dias + $2 WHERE id = $3', [e.nueva_fin, e.dias_extra, e.solicitud_id]);
+    }
+    await db.query('UPDATE extensiones SET estado = $1, respondida_en = now() WHERE id = $2', [estado, e.id]);
+    const fin = e.nueva_fin;
+    await db.query('INSERT INTO mensajes (solicitud_id, autor_id, texto) VALUES ($1, $2, $3)', [e.solicitud_id, req.usuario.id,
+      estado === 'aceptada' ? `✅ Acepté extender la renta hasta el ${fin} (+${e.dias_extra} día(s)).` : `❌ No puedo extender la renta hasta el ${fin}.`]);
+    await db.query('COMMIT');
+  } catch (err) {
+    await db.query('ROLLBACK');
+    throw err;
+  } finally {
+    db.release();
+  }
+  notificar(e.cliente_id, estado === 'aceptada'
+    ? { tipo: 'aceptada', titulo: 'Te dieron más días', mensaje: `El proveedor aceptó extender la renta de "${e.maquina_nombre}" ${e.dias_extra} día(s) más.`, enlace: `#/mis-rentas/${e.solicitud_id}` }
+    : { tipo: 'rechazada', titulo: 'No se pudo extender tu renta', mensaje: `El proveedor no aceptó extender la renta de "${e.maquina_nombre}". Puedes platicarlo por el chat.`, enlace: `#/mis-rentas/${e.solicitud_id}` });
+  res.json({ ok: true });
 }));
 
 proveedor.patch('/solicitudes/:id', ah(async (req, res) => {
@@ -671,11 +720,13 @@ clienteR.get('/solicitudes', ah(async (req, res) => {
             p.nombre AS proveedor_nombre, p.empresa AS proveedor_empresa, p.email AS proveedor_email,
             p.telefono AS proveedor_telefono, p.verificado AS proveedor_verificado,
             r.calificacion AS resena_calificacion, r.comentario AS resena_comentario,
+            ext.id AS ext_id, to_char(ext.nueva_fin, 'YYYY-MM-DD') AS ext_nueva_fin, ext.dias_extra AS ext_dias, ext.estado AS ext_estado,
             (SELECT count(*)::int FROM mensajes mj WHERE mj.solicitud_id = s.id AND mj.autor_id <> $1 AND NOT mj.leido) AS no_leidos
      FROM solicitudes s
      JOIN maquinaria m ON m.id = s.maquina_id
      JOIN usuarios p ON p.id = m.proveedor_id
      LEFT JOIN resenas r ON r.solicitud_id = s.id
+     LEFT JOIN LATERAL (SELECT * FROM extensiones e WHERE e.solicitud_id = s.id ORDER BY e.id DESC LIMIT 1) ext ON true
      WHERE s.cliente_id = $1
      ORDER BY s.created_at DESC`, [req.usuario.id]);
   res.json(rows);
@@ -725,6 +776,49 @@ clienteR.post('/solicitudes', ah(async (req, res) => {
     enlace: `#/panel/solicitud/${rows[0].id}`
   });
   res.status(201).json(rows[0]);
+}));
+
+// Cliente: pedir más días en una renta aceptada que no ha terminado
+clienteR.post('/solicitudes/:id/extension', ah(async (req, res) => {
+  const nuevaFin = req.body.nueva_fin;
+  if (!fechaValida(nuevaFin)) return res.status(400).json({ error: 'Elige la nueva fecha de fin.' });
+  const { rows: [s] } = await pool.query(
+    `SELECT s.id, s.maquina_id, s.estado, s.nombre_contacto, m.nombre AS maquina_nombre, m.precio_dia, m.proveedor_id,
+            ($1::date - s.fecha_fin) AS dias_extra, (s.fecha_fin < ${HOY}) AS terminada
+     FROM solicitudes s JOIN maquinaria m ON m.id = s.maquina_id
+     WHERE s.id = $2 AND s.cliente_id = $3 AND s.fecha_fin IS NOT NULL`, [nuevaFin, id(req.params.id), req.usuario.id]);
+  if (!s) return res.status(404).json({ error: 'Renta no encontrada.' });
+  if (s.estado !== 'aceptada') return res.status(400).json({ error: 'Solo puedes pedir más días en una renta aceptada.' });
+  if (s.terminada) return res.status(400).json({ error: 'Esta renta ya terminó. Haz una solicitud nueva.' });
+  if (!(s.dias_extra >= 1 && s.dias_extra <= 365)) return res.status(400).json({ error: 'La nueva fecha debe ser posterior a la fecha de fin actual.' });
+  const { rows: [pend] } = await pool.query("SELECT 1 FROM extensiones WHERE solicitud_id = $1 AND estado = 'pendiente'", [s.id]);
+  if (pend) return res.status(409).json({ error: 'Ya tienes una petición de más días esperando respuesta.' });
+  const { rows: [choque] } = await pool.query(
+    `SELECT 1 FROM solicitudes s2 JOIN solicitudes s ON s.id = $2
+     WHERE s2.maquina_id = s.maquina_id AND s2.id <> s.id AND s2.estado = 'aceptada'
+       AND s2.fecha_inicio IS NOT NULL AND s2.fecha_fin IS NOT NULL
+       AND daterange(s2.fecha_inicio, s2.fecha_fin, '[]') && daterange(s.fecha_fin + 1, $1::date, '[]')`, [nuevaFin, s.id]);
+  if (choque) return res.status(409).json({ error: 'El equipo ya está rentado en parte de esos días. Elige una fecha más cercana.' });
+
+  const { rows: [e] } = await pool.query(
+    'INSERT INTO extensiones (solicitud_id, nueva_fin, dias_extra) VALUES ($1, $2, $3) RETURNING id', [s.id, nuevaFin, s.dias_extra]);
+  const extra = Number(s.precio_dia) * s.dias_extra;
+  await pool.query('INSERT INTO mensajes (solicitud_id, autor_id, texto) VALUES ($1, $2, $3)', [s.id, req.usuario.id,
+    `📅 Pedí extender la renta hasta el ${nuevaFin} (+${s.dias_extra} día(s), $${extra.toLocaleString('es-MX')} más).`]);
+  notificar(s.proveedor_id, {
+    tipo: 'solicitud', titulo: 'Piden más días de renta',
+    mensaje: `${s.nombre_contacto} quiere extender la renta de "${s.maquina_nombre}" hasta el ${nuevaFin} (+${s.dias_extra} día(s)).`,
+    enlace: `#/panel/solicitud/${s.id}`
+  });
+  res.status(201).json(e);
+}));
+
+clienteR.patch('/extensiones/:id/cancelar', ah(async (req, res) => {
+  const { rowCount } = await pool.query(
+    `UPDATE extensiones e SET estado = 'cancelada', respondida_en = now() FROM solicitudes s
+     WHERE e.id = $1 AND s.id = e.solicitud_id AND s.cliente_id = $2 AND e.estado = 'pendiente'`, [id(req.params.id), req.usuario.id]);
+  if (!rowCount) return res.status(404).json({ error: 'La petición ya no está pendiente.' });
+  res.json({ ok: true });
 }));
 
 clienteR.patch('/solicitudes/:id/cancelar', ah(async (req, res) => {

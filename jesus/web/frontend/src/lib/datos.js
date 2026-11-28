@@ -98,6 +98,11 @@ export function deISO(s) {
   return new Date(y, m - 1, d);
 }
 export const hoyISO = () => aISO(new Date());
+export function sumarDias(iso, n) {
+  const d = deISO(iso);
+  d.setDate(d.getDate() + n);
+  return aISO(d);
+}
 export function diasEntre(ini, fin) {
   return Math.round((deISO(fin) - deISO(ini)) / 86400000) + 1;
 }

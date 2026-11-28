@@ -10,7 +10,7 @@
   import Chat from '../lib/Chat.svelte';
   import Estrellas from '../lib/Estrellas.svelte';
   import {
-    normalizar, formatoPrecio, formatoDinero, formatoFecha, formatoRango, hoyISO, whatsapp, ESTADOS_SOLICITUD
+    normalizar, formatoPrecio, formatoDinero, formatoFecha, formatoRango, formatoDia, hoyISO, sumarDias, diasEntre, whatsapp, ESTADOS_SOLICITUD
   } from '../lib/datos.js';
 
   export let solicitudId = '';
@@ -26,6 +26,8 @@
   let calif = 0;
   let comentario = '';
   let enviandoRes = false;
+  let nuevaFin = ''; // pedir más días
+  let enviandoExt = false;
 
   async function cargar() {
     errorCarga = '';
@@ -70,9 +72,40 @@
   $: refrescar(solicitudes);
   $: puedeCalificar = detalle && detalle.estado === 'aceptada' && !detalle.resena_calificacion && detalle.fecha_inicio <= hoyISO();
 
+  // Pedir más días: solo en rentas aceptadas que no han terminado
+  $: puedeExtender = detalle && detalle.estado === 'aceptada' && detalle.fecha_fin && detalle.fecha_fin >= hoyISO() && detalle.ext_estado !== 'pendiente';
+  $: minFin = detalle?.fecha_fin ? sumarDias(detalle.fecha_fin, 1) : '';
+  $: diasExtra = nuevaFin && minFin && nuevaFin >= minFin ? diasEntre(minFin, nuevaFin) : 0;
+
+  async function pedirMasDias() {
+    if (!diasExtra) return toast('Elige una fecha posterior al ' + formatoDia(detalle.fecha_fin, true), 'error');
+    enviandoExt = true;
+    try {
+      await api(`/cliente/solicitudes/${detalle.id}/extension`, { method: 'POST', body: { nueva_fin: nuevaFin } });
+      toast('Petición enviada. Te avisaremos cuando el proveedor responda.');
+      nuevaFin = '';
+      await cargar();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      enviandoExt = false;
+    }
+  }
+
+  async function cancelarExtension() {
+    try {
+      await api(`/cliente/extensiones/${detalle.ext_id}/cancelar`, { method: 'PATCH' });
+      toast('Petición cancelada');
+      await cargar();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
   function abrirDetalle(s, v = 'info') {
     detalle = s;
     vista = v;
+    nuevaFin = '';
     calif = 0;
     comentario = '';
   }
@@ -212,9 +245,10 @@
                         </span>
                       </span>
                     </button>
-                    {#if s.no_leidos}
-                      <button class="msg-pill" on:click={() => abrirDetalle(s, 'chat')} title="Mensajes sin leer"><Icono nombre="chat" tam={13} /> {s.no_leidos}</button>
-                    {/if}
+                    {#if s.ext_estado === 'pendiente'}<span class="badge sol-pendiente">Pediste +{s.ext_dias} día(s)</span>{/if}
+                    <button class="chat-btn" class:nuevo={s.no_leidos} on:click={() => abrirDetalle(s, 'chat')} title="Abrir el chat con el proveedor">
+                      <Icono nombre="chat" tam={14} /> Chat{#if s.no_leidos} <span class="count">{s.no_leidos}</span>{/if}
+                    </button>
                     {#if s.resena_calificacion}<Estrellas valor={s.resena_calificacion} tam={12} />{/if}
                     <span class="badge sol-{s.estado}">{ESTADOS_SOLICITUD[s.estado] || s.estado}</span>
                   </li>
@@ -282,6 +316,30 @@
             </div>
           {/if}
 
+          {#if detalle.ext_estado === 'pendiente'}
+            <div class="notice notice-warn ext-aviso">
+              <Icono nombre="clock" tam={16} />
+              <span>Pediste extender hasta el <strong>{formatoDia(detalle.ext_nueva_fin, true)}</strong> (+{detalle.ext_dias} día(s), {formatoDinero(detalle.precio_dia * detalle.ext_dias)} más). Esperando respuesta del proveedor.</span>
+              <button class="btn btn-sm btn-ghost" on:click={cancelarExtension}>Cancelar petición</button>
+            </div>
+          {:else if detalle.ext_estado === 'rechazada' && detalle.estado === 'aceptada'}
+            <div class="notice"><Icono nombre="alert" tam={16} /> El proveedor no aceptó extender hasta el {formatoDia(detalle.ext_nueva_fin, true)}. Puedes platicarlo por <button class="link-btn" on:click={() => (vista = 'chat')}>el chat</button>.</div>
+          {/if}
+
+          {#if puedeExtender}
+            <form class="ext-form" on:submit|preventDefault={pedirMasDias}>
+              <span class="label">¿Necesitas más días?</span>
+              <p class="muted small">Tu renta termina el {formatoDia(detalle.fecha_fin, true)}. Elige hasta qué día la quieres y el proveedor te confirma.</p>
+              <div class="ext-fila">
+                <input class="input" type="date" min={minFin} max={sumarDias(detalle.fecha_fin, 365)} bind:value={nuevaFin} aria-label="Nueva fecha de fin" />
+                <button class="btn btn-primary" type="submit" disabled={enviandoExt || !diasExtra}>
+                  {#if enviandoExt}<span class="spinner"></span>{/if} Pedir más días
+                </button>
+              </div>
+              {#if diasExtra}<p class="small">+{diasExtra} día(s) × {formatoDinero(detalle.precio_dia)} = <strong>{formatoDinero(detalle.precio_dia * diasExtra)}</strong> más</p>{/if}
+            </form>
+          {/if}
+
           {#if detalle.resena_calificacion}
             <div class="mi-resena">
               <span class="label">Tu reseña</span>
@@ -302,6 +360,7 @@
     <svelte:fragment slot="pie">
       {#if detalle}
         <a class="btn btn-ghost" href={`#/maquina/${detalle.maquina_id}`}>Ver equipo</a>
+        {#if vista !== 'chat'}<button class="btn btn-ghost" on:click={() => (vista = 'chat')}><Icono nombre="chat" tam={16} /> Abrir chat</button>{/if}
         {#if detalle.estado === 'pendiente'}
           <button class="btn btn-danger-ghost" on:click={() => cancelar(detalle)}>Cancelar solicitud</button>
         {/if}

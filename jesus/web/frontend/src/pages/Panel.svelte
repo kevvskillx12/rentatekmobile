@@ -15,7 +15,7 @@
   import { ESTADOS, SIN_ESTADO, separarUbicacion, unirUbicacion } from '../lib/ubicaciones.js';
   import { esTactil, comprimirImagen } from '../lib/imagen.js';
   import {
-    normalizar, formatoPrecio, formatoDinero, formatoCompacto, formatoFecha, formatoRango, whatsapp,
+    normalizar, formatoPrecio, formatoDinero, formatoCompacto, formatoFecha, formatoRango, formatoDia, whatsapp,
     ESTADOS_MAQUINA, ESTADOS_SOLICITUD
   } from '../lib/datos.js';
 
@@ -92,9 +92,12 @@
     return () => document.removeEventListener('visibilitychange', alVolver);
   });
 
-  $: pendientes = solicitudes.filter((s) => s.estado === 'pendiente');
+  // Pendientes = solicitudes nuevas + peticiones de más días sin responder
+  $: pendientes = solicitudes.filter((s) => s.estado === 'pendiente' || s.ext_estado === 'pendiente');
   $: recientes = solicitudes.filter((s) => s.estado !== 'pendiente').slice(0, 5);
-  $: solFiltradas = filtroSol === 'todas' ? solicitudes : solicitudes.filter((s) => s.estado === filtroSol);
+  $: solFiltradas = filtroSol === 'todas' ? solicitudes
+    : filtroSol === 'pendiente' ? pendientes
+    : solicitudes.filter((s) => s.estado === filtroSol);
   $: conteo = (e) => solicitudes.filter((s) => s.estado === e).length;
   $: m = resumen?.maquinaria;
   $: kpis = resumen
@@ -265,6 +268,22 @@
   }
 
   // ---------- Solicitudes ----------
+  async function responderExtension(s, estado) {
+    const ok = await confirmar(
+      estado === 'aceptada'
+        ? { titulo: 'Dar más días', mensaje: `La renta de ${s.nombre_contacto} se extenderá hasta el ${formatoDia(s.ext_nueva_fin, true)} (+${s.ext_dias} día(s), ${formatoDinero(s.precio_dia * s.ext_dias)} más).`, accion: 'Aceptar' }
+        : { titulo: 'Rechazar más días', mensaje: `¿No aceptar la extensión de ${s.nombre_contacto} hasta el ${formatoDia(s.ext_nueva_fin, true)}? La renta sigue con sus fechas actuales.`, accion: 'Rechazar', peligro: true }
+    );
+    if (!ok) return;
+    try {
+      await api(`/proveedor/extensiones/${s.ext_id}`, { method: 'PATCH', body: { estado } });
+      toast(estado === 'aceptada' ? 'Renta extendida' : 'Extensión rechazada');
+      await cargarTodo();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
   async function responder(s, estado) {
     const ok = await confirmar(
       estado === 'aceptada'
@@ -389,8 +408,13 @@
                           </span>
                         </button>
                         <div class="row-actions">
-                          <button class="btn btn-sm btn-primary" on:click={() => responder(s, 'aceptada')}>Aceptar</button>
-                          <button class="btn btn-sm btn-ghost" on:click={() => responder(s, 'rechazada')}>Rechazar</button>
+                          {#if s.estado === 'pendiente'}
+                            <button class="btn btn-sm btn-primary" on:click={() => responder(s, 'aceptada')}>Aceptar</button>
+                            <button class="btn btn-sm btn-ghost" on:click={() => responder(s, 'rechazada')}>Rechazar</button>
+                          {:else}
+                            <span class="badge sol-pendiente">Pide +{s.ext_dias} día(s)</span>
+                            <button class="btn btn-sm btn-primary" on:click={() => abrirDetalle(s)}>Responder</button>
+                          {/if}
                         </div>
                       </li>
                     {/each}
@@ -468,15 +492,20 @@
                         <td data-label="Fecha">{formatoFecha(s.created_at)}</td>
                         <td data-label="Estado">
                           <span class="badge sol-{s.estado}">{ESTADOS_SOLICITUD[s.estado] || s.estado}</span>
-                          {#if s.no_leidos}<button class="msg-pill" on:click|stopPropagation={() => abrirDetalle(s, 'chat')}><Icono nombre="chat" tam={12} /> {s.no_leidos}</button>{/if}
+                          {#if s.ext_estado === 'pendiente'}<span class="badge sol-pendiente">Pide +{s.ext_dias} día(s)</span>{/if}
                         </td>
                         <td class="td-actions" on:click|stopPropagation>
                           {#if s.estado === 'pendiente'}
                             <button class="btn btn-sm btn-primary" on:click={() => responder(s, 'aceptada')}>Aceptar</button>
                             <button class="btn btn-sm btn-ghost" on:click={() => responder(s, 'rechazada')}>Rechazar</button>
+                          {:else if s.ext_estado === 'pendiente'}
+                            <button class="btn btn-sm btn-primary" on:click={() => abrirDetalle(s)}>Responder</button>
                           {:else}
                             <button class="btn btn-sm btn-ghost" on:click={() => abrirDetalle(s)}>Ver</button>
                           {/if}
+                          <button class="chat-btn" class:nuevo={s.no_leidos} on:click={() => abrirDetalle(s, 'chat')} title="Abrir el chat con el cliente">
+                            <Icono nombre="chat" tam={14} /> Chat{#if s.no_leidos} <span class="count">{s.no_leidos}</span>{/if}
+                          </button>
                         </td>
                       </tr>
                     {/each}
@@ -650,6 +679,16 @@
           {#if detalle.mensaje}
             <blockquote class="quote">{detalle.mensaje}</blockquote>
           {/if}
+          {#if detalle.ext_estado === 'pendiente'}
+            <div class="notice notice-warn ext-aviso">
+              <Icono nombre="calendar" tam={16} />
+              <span><strong>{detalle.nombre_contacto}</strong> pide extender la renta hasta el <strong>{formatoDia(detalle.ext_nueva_fin, true)}</strong> (+{detalle.ext_dias} día(s), {formatoDinero(detalle.precio_dia * detalle.ext_dias)} más).</span>
+              <span class="ext-botones">
+                <button class="btn btn-sm btn-ghost" on:click={() => responderExtension(detalle, 'rechazada')}>Rechazar</button>
+                <button class="btn btn-sm btn-primary" on:click={() => responderExtension(detalle, 'aceptada')}>Dar más días</button>
+              </span>
+            </div>
+          {/if}
           {#if detalle.resena_calificacion}
             <div class="mi-resena">
               <span class="label">Reseña del cliente</span>
@@ -665,6 +704,7 @@
         <a class="btn btn-ghost" target="_blank" rel="noreferrer" href={whatsapp(detalle.telefono)}>
           <Icono nombre="phone" tam={16} /> WhatsApp
         </a>
+        {#if vista !== 'chat'}<button class="btn btn-ghost" on:click={() => (vista = 'chat')}><Icono nombre="chat" tam={16} /> Abrir chat</button>{/if}
         {#if detalle.estado === 'pendiente'}
           <button class="btn btn-danger-ghost" on:click={() => responder(detalle, 'rechazada')}>Rechazar</button>
           <button class="btn btn-primary" on:click={() => responder(detalle, 'aceptada')}>Aceptar</button>

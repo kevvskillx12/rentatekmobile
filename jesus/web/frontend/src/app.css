@@ -1082,3 +1082,23 @@ input[type='range'] { accent-color: var(--brand); width: 100%; }
   position: absolute; top: 12px; right: 12px; z-index: 2;
   background: var(--navy); color: #fff; box-shadow: var(--sh-sm);
 }
+
+/* Botón de chat siempre visible en las listas de rentas */
+.chat-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap;
+}
+.chat-btn:hover { border-color: var(--brand); }
+.chat-btn.nuevo { background: var(--brand); border-color: var(--brand); color: #172033; }
+.chat-btn .count { margin-left: 2px; }
+.td-actions .chat-btn { margin-left: 6px; }
+
+/* Pedir más días */
+.ext-form { display: grid; gap: 8px; padding: 14px; border: 1px dashed var(--line); border-radius: var(--r); }
+.ext-form p { margin: 0; }
+.ext-fila { display: flex; gap: 8px; flex-wrap: wrap; }
+.ext-fila .input { flex: 1 1 160px; }
+.ext-aviso { flex-wrap: wrap; align-items: center; }
+.ext-aviso > span:not(.ext-botones) { flex: 1 1 240px; }
+.ext-botones { display: flex; gap: 6px; }

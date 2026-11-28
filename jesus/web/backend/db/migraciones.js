@@ -83,6 +83,18 @@ export async function migrar(db) {
     );
     CREATE INDEX IF NOT EXISTS mensajes_solicitud_idx ON mensajes (solicitud_id, created_at);
 
+    -- Peticiones del cliente para extender una renta aceptada (más días)
+    CREATE TABLE IF NOT EXISTS extensiones (
+      id serial PRIMARY KEY,
+      solicitud_id int NOT NULL REFERENCES solicitudes(id) ON DELETE CASCADE,
+      nueva_fin date NOT NULL,
+      dias_extra int NOT NULL CHECK (dias_extra > 0),
+      estado text NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aceptada', 'rechazada', 'cancelada')),
+      created_at timestamptz DEFAULT now(),
+      respondida_en timestamptz
+    );
+    CREATE INDEX IF NOT EXISTS extensiones_solicitud_idx ON extensiones (solicitud_id, estado);
+
     CREATE TABLE IF NOT EXISTS contactos (
       id serial PRIMARY KEY,
       nombre text NOT NULL,

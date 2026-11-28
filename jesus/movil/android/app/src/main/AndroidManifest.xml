@@ -40,5 +40,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Cámara: tomar la foto de la INE y de los equipos desde la app (se pide al usarla por primera vez) -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Micrófono: notas de voz en el chat -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

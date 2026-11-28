@@ -16,6 +16,7 @@
   import Contacto from './pages/Contacto.svelte';
   import Mensajes from './pages/Mensajes.svelte';
   import { noLeidosChat } from './lib/mensajes.js';
+  import { esApp } from './lib/plataforma.js';
   import Avisos from './lib/Avisos.svelte';
   import Icono from './lib/Icono.svelte';
   import Campana from './lib/Campana.svelte';
@@ -196,6 +197,8 @@
   {/key}
 </main>
 
+<!-- El pie de página es de la versión web; en la app Android no se muestra -->
+{#if !esApp}
 <footer class="footer">
   <div class="container footer-grid">
     <div>
@@ -228,5 +231,6 @@
   </div>
   <div class="container footer-bottom">© 2026 Rentatek</div>
 </footer>
+{/if}
 
 <Avisos />

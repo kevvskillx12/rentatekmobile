@@ -447,12 +447,27 @@ app.get('/api/conversaciones', auth(), ah(async (req, res) => {
   res.json(rows);
 }));
 
+// Notifica a la otra persona de la conversación (una sola notificación sin leer por chat, para no saturar)
+async function avisarMensaje(s, autorId, resumen) {
+  const destino = autorId === s.cliente_id ? s.proveedor_id : s.cliente_id;
+  const enlace = `#/mensajes/${s.id}`; // abre la conversación en el apartado Mensajes
+  const { rows: [ya] } = await pool.query(
+    `SELECT 1 FROM notificaciones WHERE usuario_id = $1 AND tipo = 'mensaje' AND enlace = $2 AND NOT leida`, [destino, enlace]);
+  if (ya) return;
+  const { rows: [autor] } = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [autorId]);
+  notificar(destino, { tipo: 'mensaje', titulo: `Nuevo mensaje de ${autor.nombre.split(' ')[0]}`, mensaje: `Sobre "${s.maquina_nombre}": ${resumen.slice(0, 120)}`, enlace });
+}
+
+const TIPOS_AUDIO = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/mpeg', 'audio/wav'];
+const duracion = (seg) => `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+
 app.get('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
   const s = await accesoSolicitud(id(req.params.id), req.usuario.id);
   if (!s) return res.status(404).json({ error: 'Conversación no encontrada.' });
   await pool.query('UPDATE mensajes SET leido = true WHERE solicitud_id = $1 AND autor_id <> $2 AND NOT leido', [s.id, req.usuario.id]);
   const { rows } = await pool.query(
-    `SELECT mj.id, mj.autor_id, mj.texto, mj.created_at, u.nombre AS autor_nombre
+    `SELECT mj.id, mj.autor_id, mj.texto, mj.created_at, u.nombre AS autor_nombre,
+            (mj.audio IS NOT NULL) AS tiene_audio, mj.audio_seg
      FROM mensajes mj JOIN usuarios u ON u.id = mj.autor_id
      WHERE mj.solicitud_id = $1 ORDER BY mj.created_at, mj.id`, [s.id]);
   res.json(rows);
@@ -465,17 +480,31 @@ app.post('/api/solicitudes/:id/mensajes', auth(), ah(async (req, res) => {
   if (!t) return res.status(400).json({ error: 'Escribe un mensaje.' });
   const { rows: [msg] } = await pool.query(
     'INSERT INTO mensajes (solicitud_id, autor_id, texto) VALUES ($1, $2, $3) RETURNING *', [s.id, req.usuario.id, t]);
-
-  const destino = req.usuario.id === s.cliente_id ? s.proveedor_id : s.cliente_id;
-  const enlace = `#/mensajes/${s.id}`; // abre la conversación en el apartado Mensajes
-  // Una sola notificación sin leer por conversación, para no saturar
-  const { rows: [ya] } = await pool.query(
-    `SELECT 1 FROM notificaciones WHERE usuario_id = $1 AND tipo = 'mensaje' AND enlace = $2 AND NOT leida`, [destino, enlace]);
-  if (!ya) {
-    const { rows: [autor] } = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [req.usuario.id]);
-    notificar(destino, { tipo: 'mensaje', titulo: `Nuevo mensaje de ${autor.nombre.split(' ')[0]}`, mensaje: `Sobre "${s.maquina_nombre}": ${t.slice(0, 120)}`, enlace });
-  }
+  avisarMensaje(s, req.usuario.id, t);
   res.status(201).json(msg);
+}));
+
+// Mensaje de voz: se manda el audio crudo (lo que graba el celular) con ?seg=duración
+app.post('/api/solicitudes/:id/audio', auth(), express.raw({ type: 'audio/*', limit: '3mb' }), ah(async (req, res) => {
+  const s = await accesoSolicitud(id(req.params.id), req.usuario.id);
+  if (!s) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  const tipo = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (!TIPOS_AUDIO.includes(tipo)) return res.status(415).json({ error: 'Formato de audio no soportado.' });
+  if (!Buffer.isBuffer(req.body) || req.body.length < 200) return res.status(400).json({ error: 'El audio está vacío.' });
+  const seg = Math.min(300, Math.max(1, Math.round(Number(req.query.seg) || 1)));
+  const t = `🎤 Mensaje de voz (${duracion(seg)})`;
+  const { rows: [msg] } = await pool.query(
+    'INSERT INTO mensajes (solicitud_id, autor_id, texto, audio, audio_tipo, audio_seg) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at',
+    [s.id, req.usuario.id, t, req.body, tipo, seg]);
+  avisarMensaje(s, req.usuario.id, t);
+  res.status(201).json(msg);
+}));
+
+// Descarga del audio: solo para las dos personas de la conversación (la app lo pide con su sesión)
+app.get('/api/mensajes/:id/audio', auth(), ah(async (req, res) => {
+  const { rows: [m] } = await pool.query('SELECT solicitud_id, audio, audio_tipo FROM mensajes WHERE id = $1', [id(req.params.id)]);
+  if (!m?.audio || !(await accesoSolicitud(m.solicitud_id, req.usuario.id))) return res.status(404).json({ error: 'Audio no encontrado.' });
+  res.set({ 'Content-Type': m.audio_tipo, 'Cache-Control': 'private, max-age=86400' }).send(m.audio);
 }));
 
 // ---------- dashboard proveedor ----------
@@ -966,7 +995,7 @@ app.get('/api/salud', ah(async (_req, res) => {
 }));
 
 app.use((err, _req, res, _next) => {
-  if (err.status === 413) return res.status(413).json({ error: 'La imagen es demasiado grande (máx. 4 MB).' });
+  if (err.status === 413) return res.status(413).json({ error: 'El archivo es demasiado grande.' });
   if (err.status === 400) return res.status(400).json({ error: 'Petición inválida.' });
   console.error(err);
   res.status(500).json({ error: 'Error del servidor.' });

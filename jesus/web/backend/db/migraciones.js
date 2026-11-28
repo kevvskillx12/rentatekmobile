@@ -82,6 +82,10 @@ export async function migrar(db) {
       created_at timestamptz DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS mensajes_solicitud_idx ON mensajes (solicitud_id, created_at);
+    -- Mensajes de voz: el audio va en la misma fila (texto queda como "🎤 Mensaje de voz")
+    ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio bytea;
+    ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_tipo text;
+    ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS audio_seg int;
 
     -- Peticiones del cliente para extender una renta aceptada (más días)
     CREATE TABLE IF NOT EXISTS extensiones (

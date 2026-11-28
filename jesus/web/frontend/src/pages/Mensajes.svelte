@@ -102,7 +102,7 @@
           <a class="btn btn-ghost btn-sm" href={enlaceRenta(activa)}>Ver renta</a>
         </div>
         {#key activa.id}
-          <Chat solicitudId={activa.id} otro={activa.otro_nombre} alto="min(60vh, 520px)" />
+          <Chat solicitudId={activa.id} otro={activa.otro_nombre} llenar />
         {/key}
       {:else}
         <div class="bandeja-vacia">
@@ -142,7 +142,7 @@
   .sol-txt-pendiente { color: var(--warn); }
   .sol-txt-rechazada, .sol-txt-cancelada { color: var(--bad); }
 
-  .bandeja-chat { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 360px; }
+  .bandeja-chat { padding: 14px; display: flex; flex-direction: column; gap: 10px; height: calc(100vh - 140px); min-height: 420px; }
   .chat-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .chat-head img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
   .chat-head-texto { display: grid; min-width: 0; flex: 1; }
@@ -159,6 +159,9 @@
     .bandeja { grid-template-columns: 1fr; padding-top: 12px; }
     .bandeja-lista { max-height: none; }
     .bandeja.con-chat .bandeja-lista { display: none; }
+    /* Chat abierto en celular: pantalla completa debajo de la barra superior, como app de mensajes */
+    .bandeja.con-chat { width: 100%; padding: 0; gap: 0; }
+    .bandeja.con-chat .bandeja-chat { height: calc(100dvh - 68px); min-height: 0; border: none; border-radius: 0; box-shadow: none; padding: 8px 10px 10px; }
     .bandeja:not(.con-chat) .bandeja-chat { display: none; }
     .solo-movil { display: grid; }
   }
